@@ -1,23 +1,19 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useGame } from '../context/GameContext';
 import {
-  CheckCircle2,
   Plus,
-  Volume2,
-  VolumeX,
   Send,
-  LogOut,
   Flame,
   Swords,
   Wallet,
   BarChart3,
   ShieldCheck,
-  Bell,
   Headphones,
-  Clock,
+  Coins,
 } from 'lucide-react';
 import { sound } from '../services/audio';
+import { EscrowApiService } from '../services/escrowService';
 import { DepositModal } from './DepositModal';
 import { UserProfileMenu } from './UserProfileMenu';
 import { TabType } from '../types';
@@ -28,18 +24,30 @@ export const TopBar: React.FC = () => {
     isTelegram,
     activeTab,
     setActiveTab,
-    logout,
     openProfileMenu,
-    unreadNotificationsCount,
   } = useGame();
-  const [isMuted, setIsMuted] = useState(sound.getMuted());
   const [showDeposit, setShowDeposit] = useState(false);
+  const [teteCoinBalance, setTeteCoinBalance] = useState(user.coinBalance || 0);
 
-  const handleToggleSound = () => {
-    const muted = sound.toggleMute();
-    setIsMuted(muted);
-    if (!muted) sound.playClick();
-  };
+  useEffect(() => {
+    let isMounted = true;
+    const refreshTeteCoins = () => {
+      EscrowApiService.fetchPlatformCoinProfile(user.id, user.username).then((profile) => {
+        if (isMounted && profile) setTeteCoinBalance(profile.balance);
+      });
+    };
+
+    refreshTeteCoins();
+    const interval = window.setInterval(refreshTeteCoins, 30000);
+    return () => {
+      isMounted = false;
+      window.clearInterval(interval);
+    };
+  }, [user.id, user.username]);
+
+  useEffect(() => {
+    if (typeof user.coinBalance === 'number') setTeteCoinBalance(user.coinBalance);
+  }, [user.coinBalance]);
 
   const navTabs: { id: TabType; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { id: 'arena', label: 'Arena', icon: Flame },
@@ -88,9 +96,6 @@ export const TopBar: React.FC = () => {
                   >
                     <Send className="w-2.5 h-2.5 text-white" />
                   </div>
-                )}
-                {unreadNotificationsCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-slate-900 animate-pulse" />
                 )}
               </div>
 
@@ -143,7 +148,7 @@ export const TopBar: React.FC = () => {
             })}
           </nav>
 
-          {/* Right Action Group: Balance, Sound, Logout */}
+          {/* Right Action Group: Balance and Support */}
           <div className="flex items-center gap-2">
             {/* Balance Pill */}
             <button
@@ -160,21 +165,17 @@ export const TopBar: React.FC = () => {
               </div>
             </button>
 
-            {/* Notification Center Trigger Bell */}
-            <button
-              id="btn-notifications-toggle"
-              onClick={openProfileMenu}
-              aria-label="Notification Center"
-              title="Open Notification Center & Profile"
-              className="p-1.5 rounded-xl bg-slate-900/60 hover:bg-slate-800 border border-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer relative"
+            {/* Tete Coin balance */}
+            <div
+              id="top-tete-coin-balance"
+              role="img"
+              aria-label={`Tete Coin balance: ${teteCoinBalance.toLocaleString()} coins`}
+              title="Tete Coin balance"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-amber-400/10 border border-amber-400/25 text-amber-300"
             >
-              <Bell className="w-4 h-4 text-indigo-300" />
-              {unreadNotificationsCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white font-mono font-black text-[9px] flex items-center justify-center ring-2 ring-slate-900 animate-pulse">
-                  {unreadNotificationsCount}
-                </span>
-              )}
-            </button>
+              <Coins className="w-4 h-4 shrink-0" aria-hidden="true" />
+              <span className="font-black text-xs tabular-nums">{teteCoinBalance.toLocaleString()}</span>
+            </div>
 
             {/* Live Support Trigger */}
             <button
@@ -190,25 +191,6 @@ export const TopBar: React.FC = () => {
               <Headphones className="w-4 h-4 text-amber-400" />
             </button>
 
-            {/* Sound Mute Toggle */}
-            <button
-              id="btn-sound-toggle"
-              onClick={handleToggleSound}
-              aria-label="Toggle Sound"
-              className="p-1.5 rounded-xl bg-slate-900/60 hover:bg-slate-800 border border-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
-            >
-              {isMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}
-            </button>
-
-            {/* Sign Out Button */}
-            <button
-              id="btn-signout"
-              onClick={logout}
-              title="Sign Out to Landing Page"
-              className="p-1.5 rounded-xl bg-slate-900/60 hover:bg-rose-500/20 border border-white/10 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
           </div>
         </div>
       </header>
