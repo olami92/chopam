@@ -128,6 +128,24 @@ export class EscrowApiService {
     return data;
   }
 
+  public static async reserveMatch(params: {
+    matchId: string;
+    roomCode: string;
+    gameType: 'LUDO' | 'WHOT' | 'DRAUGHTS' | 'BEAD16';
+    playerId: string;
+    playerUsername: string;
+    stakeAmount: number;
+  }): Promise<{ session: BackendMatchSession; playerBalance: BackendUserBalance }> {
+    const res = await fetch('/api/escrow/reserve-match', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to reserve match stake');
+    return data;
+  }
+
   /**
    * Verify and settle game: Backend calculates 95% net pot and credits winner's database balance
    */

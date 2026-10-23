@@ -27,6 +27,11 @@ function loadPersistentUsersFromFile() {
             const cleanName = String(u.username).toLowerCase();
             userAuthStore.set(cleanName, u);
             const engineUser = escrowEngine.getOrCreateUser(u.id || `usr_${cleanName}`, cleanName, u.availableBalance || 0);
+            escrowEngine.setUserWalletBalances(
+              engineUser.userId,
+              Number(u.availableBalance) || 0,
+              Number(u.escrowLockedBalance) || 0
+            );
             if (typeof u.totalMatchesPlayed === 'number') engineUser.totalMatchesPlayed = u.totalMatchesPlayed;
             if (typeof u.matchesWon === 'number') engineUser.matchesWon = u.matchesWon;
             if (typeof u.matchesLost === 'number') engineUser.matchesLost = u.matchesLost;
@@ -56,6 +61,7 @@ function savePersistentUsersToFile() {
       return {
         ...u,
         availableBalance: engineUser ? engineUser.availableBalance : 0,
+        escrowLockedBalance: engineUser ? engineUser.escrowLockedBalance : 0,
         totalMatchesPlayed: engineUser ? (engineUser.totalMatchesPlayed || 0) : 0,
         matchesWon: engineUser ? (engineUser.matchesWon || 0) : 0,
         matchesLost: engineUser ? (engineUser.matchesLost || 0) : 0,
@@ -153,6 +159,66 @@ async function syncUserToPostgres(username: string, displayName?: string, email?
   }
 }
 
+async function persistMatchWallets(matchId: string) {
+  const session = escrowEngine.getMatchSession(matchId);
+  if (!session) throw new Error(`Escrow session ${matchId} was not found`);
+  const balances = escrowEngine.getMatchBalances(matchId);
+  const dbUsers = new Map<string, string>();
+  for (const balance of balances) {
+    let dbUser = await syncUserToPostgres(balance.username, undefined, undefined, 0, true);
+    if (!dbUser?.id) {
+      const client = await pool.connect();
+      try {
+        const created = await client.query(
+          `INSERT INTO users (id, username, display_name, email)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (id) DO UPDATE SET username = EXCLUDED.username, updated_at = CURRENT_TIMESTAMP
+           RETURNING id`,
+          [balance.userId, balance.username.toLowerCase(), balance.username, `${balance.username.toLowerCase()}@skillstake.ng`]
+        );
+        dbUser = created.rows[0];
+        await client.query(
+          `INSERT INTO user_wallets (user_id, currency, available_balance, escrow_locked_balance)
+           VALUES ($1, 'NGN', 0, 0) ON CONFLICT (user_id, currency) DO NOTHING`,
+          [dbUser.id]
+        );
+      } finally {
+        client.release();
+      }
+    }
+    if (!dbUser?.id) throw new Error(`Could not resolve wallet for @${balance.username}`);
+    dbUsers.set(balance.userId, dbUser.id);
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const balance of balances) {
+      const dbUserId = dbUsers.get(balance.userId)!;
+      await client.query(
+        `UPDATE user_wallets
+         SET available_balance = $1, escrow_locked_balance = $2, updated_at = CURRENT_TIMESTAMP
+         WHERE user_id = $3 AND currency = 'NGN'`,
+        [balance.availableBalance, balance.escrowLockedBalance, dbUserId]
+      );
+    }
+    await client.query(
+      `INSERT INTO match_escrow_sessions (match_id, room_code, status, session_data, updated_at)
+       VALUES ($1, $2, $3, $4::jsonb, CURRENT_TIMESTAMP)
+       ON CONFLICT (match_id) DO UPDATE
+       SET room_code = EXCLUDED.room_code, status = EXCLUDED.status,
+           session_data = EXCLUDED.session_data, updated_at = CURRENT_TIMESTAMP`,
+      [matchId, session.roomCode, session.status, JSON.stringify(session)]
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 // Auto-ensure platform tables & load users from PostgreSQL on startup
 async function ensurePlatformSettingsTable() {
   try {
@@ -218,10 +284,21 @@ async function ensurePlatformSettingsTable() {
         );
       `);
 
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS match_escrow_sessions (
+          match_id VARCHAR(120) PRIMARY KEY,
+          room_code VARCHAR(120) NOT NULL,
+          status VARCHAR(32) NOT NULL,
+          session_data JSONB NOT NULL,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
       // Sync all existing PostgreSQL users into userAuthStore & escrowEngine
       const dbUsers = await client.query(`
         SELECT u.id, u.username, u.display_name, u.email, u.phone_number, u.password_hash,
-               COALESCE(w.available_balance, 0) as balance
+               COALESCE(w.available_balance, 0) as balance,
+               COALESCE(w.escrow_locked_balance, 0) as escrow_locked_balance
         FROM users u
         LEFT JOIN user_wallets w ON u.id = w.user_id AND w.currency = 'NGN'
       `);
@@ -239,8 +316,18 @@ async function ensurePlatformSettingsTable() {
             createdAt: new Date().toISOString(),
           };
           userAuthStore.set(cleanName, record);
-          escrowEngine.getOrCreateUser(record.id, cleanName, Number(row.balance) || 0);
+          const engineUser = escrowEngine.getOrCreateUser(record.id, cleanName, Number(row.balance) || 0);
+          escrowEngine.setUserWalletBalances(
+            engineUser.userId,
+            Number(row.balance) || 0,
+            Number(row.escrow_locked_balance) || 0
+          );
         }
+      }
+      const escrowSessions = await client.query('SELECT session_data FROM match_escrow_sessions');
+      for (const row of escrowSessions.rows) {
+        const session = typeof row.session_data === 'string' ? JSON.parse(row.session_data) : row.session_data;
+        if (session?.matchId) escrowEngine.restoreMatchSession(session);
       }
       if (dbUsers.rows.length > 0) {
         console.log(`[PostgreSQL Boot] Loaded ${dbUsers.rows.length} users from database into active memory store.`);
@@ -1995,7 +2082,7 @@ app.get('/api/escrow/transactions/:userId', (req, res) => {
   }
 });
 
-app.post('/api/escrow/start-match', (req, res) => {
+app.post('/api/escrow/start-match', async (req, res) => {
 
   try {
     const { matchId, roomCode, gameType, player1Id, player1Username, player2Id, player2Username, stakeAmount } = req.body;
@@ -2018,9 +2105,33 @@ app.post('/api/escrow/start-match', (req, res) => {
       player2Username || 'Player 2',
       Number(stakeAmount)
     );
+    await persistMatchWallets(matchId);
+    savePersistentUsersToFile();
     res.json({ success: true, ...result });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/escrow/reserve-match', async (req, res) => {
+  try {
+    const { matchId, roomCode, gameType, playerId, playerUsername, stakeAmount } = req.body;
+    if (!matchId || !roomCode || !playerId || stakeAmount === undefined) {
+      return res.status(400).json({ error: 'Missing required reservation parameters' });
+    }
+    const result = escrowEngine.reserveMatchStake(
+      matchId,
+      roomCode,
+      gameType || 'WHOT',
+      playerId,
+      playerUsername || 'Player',
+      Number(stakeAmount)
+    );
+    await persistMatchWallets(matchId);
+    savePersistentUsersToFile();
+    return res.json({ success: true, ...result });
+  } catch (error: any) {
+    return res.status(400).json({ error: error.message });
   }
 });
 
@@ -2131,7 +2242,7 @@ app.get('/api/rooms', (_req, res) => {
   return res.json({ success: true, rooms, activeCounts });
 });
 
-app.post(['/api/escrow/settle-match', '/api/game/verify-and-settle'], (req, res) => {
+app.post(['/api/escrow/settle-match', '/api/game/verify-and-settle'], async (req, res) => {
   try {
     const { matchId, winnerId, evidence, reason } = req.body;
     if (!matchId || !winnerId) {
@@ -2139,6 +2250,8 @@ app.post(['/api/escrow/settle-match', '/api/game/verify-and-settle'], (req, res)
     }
     const verificationEvidence = evidence || { reason: reason || 'Match verified by game rules engine' };
     const result = escrowEngine.verifyAndSettleMatch(matchId, winnerId, verificationEvidence);
+    await persistMatchWallets(matchId);
+    savePersistentUsersToFile();
     awardCoinsForSettledMatch(result.session, verificationEvidence.winner === 'draw')
       .then((coinRewards) => res.json({ success: true, result: { ...result, coinRewards } }))
       .catch((coinError) => {
@@ -2150,13 +2263,15 @@ app.post(['/api/escrow/settle-match', '/api/game/verify-and-settle'], (req, res)
   }
 });
 
-app.post('/api/escrow/refund-match', (req, res) => {
+app.post('/api/escrow/refund-match', async (req, res) => {
   try {
     const { matchId, reason } = req.body;
     if (!matchId) {
       return res.status(400).json({ error: 'Missing matchId parameter' });
     }
     const session = escrowEngine.refundMatch(matchId, reason);
+    await persistMatchWallets(matchId);
+    savePersistentUsersToFile();
     res.json({ success: true, session });
   } catch (error: any) {
     res.status(400).json({ error: error.message });

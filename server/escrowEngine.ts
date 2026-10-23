@@ -18,7 +18,7 @@ export interface UserBalance {
 export interface MatchEscrowSession {
   matchId: string;
   roomCode: string;
-  gameType: 'LUDO' | 'WHOT' | 'DRAUGHTS';
+  gameType: 'LUDO' | 'WHOT' | 'DRAUGHTS' | 'BEAD16';
   player1Id: string;
   player1Username: string;
   player2Id: string;
@@ -241,6 +241,24 @@ class EscrowEngine extends EventEmitter {
     return this.userBalances.get(userId);
   }
 
+  public setUserWalletBalances(userId: string, availableBalance: number, escrowLockedBalance: number): UserBalance | undefined {
+    const user = this.userBalances.get(userId);
+    if (!user) return undefined;
+    user.availableBalance = Math.max(0, Number(availableBalance) || 0);
+    user.escrowLockedBalance = Math.max(0, Number(escrowLockedBalance) || 0);
+    return { ...user };
+  }
+
+  public getMatchBalances(matchId: string): UserBalance[] {
+    const session = this.activeMatches.get(matchId);
+    if (!session) return [];
+    return [session.player1Id, session.player2Id]
+      .filter((userId) => userId !== 'pending')
+      .map((userId) => this.userBalances.get(userId))
+      .filter((user): user is UserBalance => Boolean(user))
+      .map((user) => ({ ...user }));
+  }
+
   /**
    * STRICT SERVER-AUTHORITATIVE DEPOSIT
    * Validates amount, credits backend balance, writes immutable audit record.
@@ -372,7 +390,7 @@ class EscrowEngine extends EventEmitter {
   public startMatch(
     matchId: string,
     roomCode: string,
-    gameType: 'LUDO' | 'WHOT' | 'DRAUGHTS',
+    gameType: 'LUDO' | 'WHOT' | 'DRAUGHTS' | 'BEAD16',
     player1Id: string,
     player1Username: string,
     player2Id: string,
@@ -392,11 +410,6 @@ class EscrowEngine extends EventEmitter {
       throw new Error('MAXIMUM_STAKE: Maximum match stake is ₦5,000,000.');
     }
 
-    const existingMatch = this.activeMatches.get(matchId);
-    if (existingMatch && existingMatch.status !== 'REFUNDED') {
-      throw new Error(`DUPLICATE_MATCH: Match ${matchId} is already active or registered in escrow.`);
-    }
-
     if (
       (player1Id && player2Id && player1Id.trim().toLowerCase() === player2Id.trim().toLowerCase()) ||
       (player1Username && player2Username && player1Username.trim().toLowerCase() === player2Username.trim().toLowerCase())
@@ -406,6 +419,69 @@ class EscrowEngine extends EventEmitter {
 
     const p1 = this.getOrCreateUser(player1Id, player1Username);
     const p2 = this.getOrCreateUser(player2Id, player2Username);
+
+    const existingMatch = this.activeMatches.get(matchId);
+    if (existingMatch && existingMatch.status !== 'REFUNDED') {
+      const sameRoomAndStake = existingMatch.roomCode === roomCode && existingMatch.gameType === gameType && existingMatch.stakePerPlayer === stakeAmount;
+      const reservedHostIsP1 = existingMatch.player1Id === player1Id;
+      const reservedHostIsP2 = existingMatch.player1Id === player2Id;
+
+      if (sameRoomAndStake && existingMatch.status === 'INITIALIZING' && existingMatch.player2Id === 'pending' && (reservedHostIsP1 || reservedHostIsP2)) {
+        const challenger = reservedHostIsP1 ? p2 : p1;
+        const challengerId = reservedHostIsP1 ? player2Id : player1Id;
+        const challengerUsername = reservedHostIsP1 ? player2Username : player1Username;
+        const isBot = challengerId.toLowerCase().includes('bot') || challengerUsername.toLowerCase().includes('cyberbot');
+        if (challenger.availableBalance < stakeAmount) {
+          if (isBot) challenger.availableBalance = stakeAmount;
+          else throw new Error(`INSUFFICIENT_FUNDS: Player @${challenger.username} has ₦${challenger.availableBalance.toLocaleString()} available, which is insufficient for ₦${stakeAmount.toLocaleString()} stake.`);
+        }
+
+        const previousAvailable = challenger.availableBalance;
+        const previousLocked = challenger.escrowLockedBalance;
+        challenger.availableBalance -= stakeAmount;
+        challenger.escrowLockedBalance += stakeAmount;
+        existingMatch.player2Id = challengerId;
+        existingMatch.player2Username = challenger.username;
+        existingMatch.grossPot = stakeAmount * 2;
+        existingMatch.gateFeePercent = this.gateFeePercent;
+        existingMatch.gateFeeAmount = Math.round((existingMatch.grossPot * this.gateFeePercent) / 100);
+        existingMatch.houseFeePercent = this.gateFeePercent;
+        existingMatch.houseFeeAmount = existingMatch.gateFeeAmount;
+        existingMatch.winnerPayout = existingMatch.grossPot - existingMatch.gateFeeAmount;
+        existingMatch.status = 'STAKED_IN_ESCROW';
+
+        this.addAuditLog({
+          matchId,
+          userId: challengerId,
+          username: challenger.username,
+          type: 'STAKE_LOCK',
+          amount: stakeAmount,
+          currency: 'NGN',
+          previousAvailable,
+          newAvailable: challenger.availableBalance,
+          previousLocked,
+          newLocked: challenger.escrowLockedBalance,
+          notes: `Locked ₦${stakeAmount.toLocaleString()} stake for ${gameType} match [${roomCode}]`,
+        });
+        this.treasury.activeEscrowLocked += stakeAmount;
+        this.treasury.totalGrossStaked += stakeAmount;
+        this.emit('match_started', existingMatch);
+
+        return {
+          session: { ...existingMatch },
+          player1Balance: { ...p1 },
+          player2Balance: { ...p2 },
+        };
+      }
+
+      const sameParticipants =
+        (existingMatch.player1Id === player1Id && existingMatch.player2Id === player2Id) ||
+        (existingMatch.player1Id === player2Id && existingMatch.player2Id === player1Id);
+      if (sameRoomAndStake && sameParticipants && existingMatch.status === 'STAKED_IN_ESCROW') {
+        return { session: { ...existingMatch }, player1Balance: { ...p1 }, player2Balance: { ...p2 } };
+      }
+      throw new Error(`DUPLICATE_MATCH: Match ${matchId} is already active or registered in escrow.`);
+    }
 
     const isBot1 = player1Id.toLowerCase().includes('bot') || player1Username.toLowerCase().includes('cyberbot');
     const isBot2 = player2Id.toLowerCase().includes('bot') || player2Username.toLowerCase().includes('cyberbot');
@@ -503,8 +579,93 @@ class EscrowEngine extends EventEmitter {
     };
   }
 
+  public reserveMatchStake(
+    matchId: string,
+    roomCode: string,
+    gameType: 'LUDO' | 'WHOT' | 'DRAUGHTS' | 'BEAD16',
+    playerId: string,
+    playerUsername: string,
+    stakeAmount: number
+  ): { session: MatchEscrowSession; playerBalance: UserBalance } {
+    if (!matchId || !roomCode || !playerId || !playerUsername) throw new Error('INVALID_INPUT: Match, room, and player details are required.');
+    if (!Number.isFinite(stakeAmount) || stakeAmount < 100 || stakeAmount > 5000000) {
+      throw new Error('INVALID_STAKE: Match stake must be between ₦100 and ₦5,000,000.');
+    }
+
+    const existing = this.activeMatches.get(matchId);
+    if (existing) {
+      if (
+        existing.roomCode !== roomCode ||
+        existing.gameType !== gameType ||
+        existing.player1Id !== playerId ||
+        existing.stakePerPlayer !== stakeAmount ||
+        existing.status === 'REFUNDED' ||
+        existing.status === 'SETTLED'
+      ) {
+        throw new Error(`DUPLICATE_MATCH: Match ${matchId} is already registered with different details.`);
+      }
+      const player = this.userBalances.get(playerId);
+      if (!player) throw new Error('DATABASE_ERROR: Player balance record not found.');
+      return { session: { ...existing }, playerBalance: { ...player } };
+    }
+
+    const player = this.getOrCreateUser(playerId, playerUsername);
+    if (player.availableBalance < stakeAmount) {
+      throw new Error(`INSUFFICIENT_FUNDS: Player @${player.username} has ₦${player.availableBalance.toLocaleString()} available, which is insufficient for ₦${stakeAmount.toLocaleString()} stake.`);
+    }
+
+    const previousAvailable = player.availableBalance;
+    const previousLocked = player.escrowLockedBalance;
+    player.availableBalance -= stakeAmount;
+    player.escrowLockedBalance += stakeAmount;
+
+    const session: MatchEscrowSession = {
+      matchId,
+      roomCode,
+      gameType,
+      player1Id: playerId,
+      player1Username: player.username,
+      player2Id: 'pending',
+      player2Username: 'Waiting for opponent',
+      stakePerPlayer: stakeAmount,
+      grossPot: stakeAmount,
+      gateFeePercent: this.gateFeePercent,
+      gateFeeAmount: 0,
+      houseFeePercent: this.gateFeePercent,
+      houseFeeAmount: 0,
+      winnerPayout: 0,
+      status: 'INITIALIZING',
+      createdAt: Date.now(),
+    };
+    this.activeMatches.set(matchId, session);
+    this.treasury.activeEscrowLocked += stakeAmount;
+    this.treasury.totalGrossStaked += stakeAmount;
+    this.addAuditLog({
+      matchId,
+      userId: playerId,
+      username: player.username,
+      type: 'STAKE_LOCK',
+      amount: stakeAmount,
+      currency: 'NGN',
+      previousAvailable,
+      newAvailable: player.availableBalance,
+      previousLocked,
+      newLocked: player.escrowLockedBalance,
+      notes: `Reserved ₦${stakeAmount.toLocaleString()} stake for ${gameType} room [${roomCode}] while waiting for an opponent.`,
+    });
+
+    return { session: { ...session }, playerBalance: { ...player } };
+  }
+
   public getMatchSession(matchId: string): MatchEscrowSession | undefined {
     return this.activeMatches.get(matchId);
+  }
+
+  public restoreMatchSession(session: MatchEscrowSession): void {
+    this.activeMatches.set(session.matchId, { ...session });
+    this.treasury.activeEscrowLocked = Array.from(this.activeMatches.values())
+      .filter((match) => match.status !== 'SETTLED' && match.status !== 'REFUNDED')
+      .reduce((total, match) => total + match.grossPot, 0);
   }
 
   /**
@@ -531,10 +692,23 @@ class EscrowEngine extends EventEmitter {
     }
 
     if (session.status === 'SETTLED') {
-      throw new Error(`ALREADY_SETTLED: Match ${matchId} has already been settled and funds disbursed.`);
+      const winner = session.winnerId ? this.userBalances.get(session.winnerId) : undefined;
+      const loser = session.loserId ? this.userBalances.get(session.loserId) : undefined;
+      if (!winner || !loser) throw new Error('DATABASE_ERROR: Settled participant balances are unavailable.');
+      return {
+        session: { ...session },
+        winner: { ...winner },
+        loser: { ...loser },
+        settlementTxHash: session.settlementTxHash || '',
+        verifiedNetPayout: session.winnerPayout,
+        verifiedHouseFee: session.gateFeeAmount,
+      };
     }
     if (session.status === 'REFUNDED') {
       throw new Error(`ALREADY_REFUNDED: Match ${matchId} was refunded and cannot be settled.`);
+    }
+    if (session.status === 'INITIALIZING' || session.player2Id === 'pending') {
+      throw new Error(`MATCH_NOT_READY: Both player stakes must be in escrow before settlement.`);
     }
 
     // Winner must be a legitimate registered participant

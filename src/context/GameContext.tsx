@@ -1296,13 +1296,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const pot = Math.round(stake * 1.9); // Gate fee deducted pot
       const fee = Math.round(stake * 0.1);
       const generatedCode = roomCode || `TG-${Math.floor(1000 + Math.random() * 9000)}`;
-      const matchId = `M-${Math.floor(1000 + Math.random() * 9000)}`;
       const matchIsVsAi = isVsAi !== undefined ? isVsAi : !(isPrivate || roomCode);
+      const matchId = roomCode
+        ? `M-${roomCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 40)}`
+        : `M-${Math.random().toString(36).slice(2, 12).toUpperCase()}`;
 
       const isWaitingForOpponent = initialStatus === 'waiting_for_opponent';
 
       const opp = opponent || {
-        id: isWaitingForOpponent ? 'waiting' : 'opp_' + Math.random().toString(36).substring(2, 7),
+        id: isWaitingForOpponent ? 'waiting' : matchIsVsAi ? 'bot_' + Math.random().toString(36).substring(2, 7) : 'opp_' + Math.random().toString(36).substring(2, 7),
         username: isWaitingForOpponent
           ? 'Waiting for Opponent...'
           : isPrivate
@@ -1328,37 +1330,43 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Clear live replay step buffer for new match
       clearReplaySteps();
 
-      // Lock escrow ONLY if match starts immediately (not when waiting for opponent)
-      if (!isWaitingForOpponent) {
-        setUser((prev) => ({
-          ...prev,
-          availableBalance: Math.max(0, prev.availableBalance - stake),
-          escrowBalance: prev.escrowBalance + stake,
-        }));
-
-        EscrowApiService.startMatch({
-          matchId,
-          roomCode: generatedCode,
-          gameType: gameTypeMapping[gameMode] || 'WHOT',
-          player1Id: user.id,
-          player1Username: user.username,
-          player2Id: opp.id,
-          player2Username: opp.username,
-          stakeAmount: stake,
-        })
-          .then((res) => {
-            if (res?.player1Balance) {
-              setUser((prev) => ({
-                ...prev,
-                availableBalance: res.player1Balance.availableBalance,
-                escrowBalance: res.player1Balance.escrowLockedBalance,
-              }));
-            }
-          })
-          .catch((err) => {
-            console.error('Backend match start error:', err);
+      const escrowRequest = isWaitingForOpponent
+        ? EscrowApiService.reserveMatch({
+            matchId,
+            roomCode: generatedCode,
+            gameType: gameTypeMapping[gameMode] || 'WHOT',
+            playerId: user.id,
+            playerUsername: user.username,
+            stakeAmount: stake,
+          }).then((res) => ({ player1Balance: res.playerBalance }))
+        : EscrowApiService.startMatch({
+            matchId,
+            roomCode: generatedCode,
+            gameType: gameTypeMapping[gameMode] || 'WHOT',
+            player1Id: user.id,
+            player1Username: user.username,
+            player2Id: opp.id,
+            player2Username: opp.username,
+            stakeAmount: stake,
           });
-      }
+      escrowRequest
+        .then((res) => {
+          const balance = res?.player1Balance;
+          if (balance) setUser((prev) => ({
+              ...prev,
+              availableBalance: balance.availableBalance,
+              escrowBalance: balance.escrowLockedBalance,
+            }));
+        })
+        .catch((err) => {
+          console.error('Backend escrow reservation error:', err);
+          setActiveMatch((prev) => prev?.id === matchId ? null : prev);
+          addNotification({
+            title: 'Stake could not be locked',
+            message: err?.message || 'The match was not started because the stake could not be secured.',
+            type: 'system',
+          });
+        });
 
       // Update active match state
       const newMatch: ActiveMatch = {
@@ -1418,14 +1426,18 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Immediately mark active match as completed to prevent double-refund on match exit
       setActiveMatch((prev) => (prev ? { ...prev, status: 'completed' } : null));
 
-      // Send game verification and settlement request strictly to Node.js backend
-      EscrowApiService.verifyAndSettle({
+      // The server owns stake movement; the client only mirrors the settled wallet.
+      const settleRequest = winner === 'draw'
+        ? EscrowApiService.refundMatch(matchId, 'Match ended in a draw').then(() =>
+            EscrowApiService.fetchUserBalance(user.id, user.username).then((balance) => {
+              if (balance) setUser((prev) => ({ ...prev, availableBalance: balance.availableBalance, escrowBalance: balance.escrowLockedBalance }));
+              return null;
+            })
+          )
+        : EscrowApiService.verifyAndSettle({
         matchId,
         winnerId,
-        reason:
-          winner === 'draw'
-            ? 'Match ended in draw - refunded'
-            : `Match won by ${winner === 'player' ? user.username : opponent.username}`,
+        reason: `Match won by ${winner === 'player' ? user.username : opponent.username}`,
         evidence: {
           gameMode,
           winner,
@@ -1435,7 +1447,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           pot,
           clientTimestamp: Date.now(),
         },
-      })
+      });
+      settleRequest
         .then((settlementResult) => {
           if (settlementResult) {
             const cleanUser = user.username ? user.username.trim().toLowerCase() : '';
@@ -1490,8 +1503,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           return {
             ...prev,
-            availableBalance: prev.availableBalance + pot,
-            escrowBalance: Math.max(0, prev.escrowBalance - stake),
             netWinnings: prev.netWinnings + profitGain,
             totalWagers: summary.allMatches,
             winRate: summary.liveWinRate,
@@ -1550,7 +1561,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           return {
             ...prev,
-            escrowBalance: Math.max(0, prev.escrowBalance - stake),
             netWinnings: prev.netWinnings - stake,
             totalWagers: summary.allMatches,
             winRate: summary.liveWinRate,
@@ -1589,12 +1599,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         telegram.triggerHaptic('warning');
       } else {
         // Draw / Refund
-        setUser((prev) => ({
-          ...prev,
-          availableBalance: prev.availableBalance + stake,
-          escrowBalance: Math.max(0, prev.escrowBalance - stake),
-        }));
-
         const newTx: EscrowTransaction = {
           id: `tx_${Date.now().toString().slice(-4)}`,
           matchId,
@@ -2091,6 +2095,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       roomCode,
       hostName: user.displayName,
       hostUsername: user.username,
+      hostUserId: user.id,
       hostAvatar: user.avatarUrl,
       hostWinRate: user.winRate,
       gameMode,
@@ -2134,7 +2139,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       const opp = {
-        id: 'opp_' + table.id,
+        id: table.hostUserId || table.hostUsername,
         username: table.hostUsername,
         displayName: table.hostName,
         avatarUrl: table.hostAvatar,
@@ -2209,7 +2214,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const turnMode = existing.turnMode || (gameMode === 'ludo_blitz' ? 'fast_blitz' : 'casual');
           const stake = Number(existing.stake) || 2500;
           setActiveMatch({
-            id: existing.id || 'M-' + cleanCode,
+            id: `M-${cleanCode.replace(/[^A-Z0-9_-]/g, '').slice(0, 40)}`,
             roomCode: cleanCode,
             gameMode,
             turnMode,
@@ -2306,16 +2311,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       EscrowApiService.fetchRoomByCode(activeRoomCode).then((room) => {
         if (room && room.joinedPlayer) {
           const jp = room.joinedPlayer;
+          if (activeMatchStatus === 'waiting_for_opponent') {
+            EscrowApiService.fetchUserBalance(user.id, user.username).then((balance) => {
+              if (balance) setUser((prev) => ({ ...prev, availableBalance: balance.availableBalance, escrowBalance: balance.escrowLockedBalance }));
+            });
+          }
           setActiveMatch((prev) => {
             if (!prev || prev.opponent.username === jp.username) return prev;
-
-            if (prev.status === 'waiting_for_opponent') {
-              setUser((u) => ({
-                ...u,
-                availableBalance: Math.max(0, u.availableBalance - prev.stake),
-                escrowBalance: u.escrowBalance + prev.stake,
-              }));
-            }
 
             sound.playWin();
             telegram.triggerHaptic('success');
@@ -2341,7 +2343,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [activeRoomCode, activeMatchStatus, activeOpponentUsername, addNotification]);
+  }, [activeRoomCode, activeMatchStatus, activeOpponentUsername, addNotification, user.id, user.username]);
 
   // Resume a match opened from a Telegram bot deep link after authentication.
   const handledStartParamRef = useRef<string | null>(null);
@@ -2436,14 +2438,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (!prev) return prev;
             if (prev.opponent.username === p2.username && prev.status === 'locked_escrow') {
               return prev;
-            }
-
-            if (prev.status === 'waiting_for_opponent') {
-              setUser((u) => ({
-                ...u,
-                availableBalance: Math.max(0, u.availableBalance - prev.stake),
-                escrowBalance: u.escrowBalance + prev.stake,
-              }));
             }
 
             sound.playWin();
