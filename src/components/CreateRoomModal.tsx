@@ -144,7 +144,7 @@ export const CreateRoomModal: React.FC<CreateRoomModalProps> = ({ onClose, initi
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:p-4 bg-black/80 backdrop-blur-sm">
       <motion.div
         id="create-room-modal"
         initial={{ scale: 0.94, opacity: 0, y: 16 }}
