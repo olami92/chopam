@@ -61,3 +61,9 @@ See `.env.example` for the complete template. At minimum, configure PostgreSQL u
 - Configure the Telegram bot, HTTPS Mini App URL, database, and any payment/escrow integrations before enabling those production features.
 
 
+
+## Deploying on Render
+
+The repository includes `render.yaml` for a Node web service. It builds from the repository root using `npm ci --include=dev && npm run build`, then starts with `npm start`. The build creates `dist/server.cjs`, which the start script runs. The server listens on Render's assigned `PORT` and exposes `/api/health` for health checks.
+
+For an existing Render service, make sure **Root Directory** is blank (repository root), **Build Command** is `npm ci --include=dev && npm run build`, and **Start Command** is `npm start`. If the service uses a different root directory or build command, it may start without producing `dist/server.cjs`. Add the required values from `.env.example` under the service's environment settings before deployment.
