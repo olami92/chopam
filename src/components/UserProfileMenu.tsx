@@ -24,11 +24,9 @@ import {
   LogOut,
   Mail,
   Phone,
-  Headphones,
   MessageSquarePlus,
   Bug,
   Lightbulb,
-  Trophy,
   RefreshCw,
 } from 'lucide-react';
 import { sound } from '../services/audio';
@@ -52,7 +50,8 @@ export const UserProfileMenu: React.FC = () => {
     logout,
   } = useGame();
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'notifications' | 'feedback'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'notifications'>('profile');
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [isEditingUsername, setIsEditingUsername] = useState(false);
   const [tempUsername, setTempUsername] = useState(user.username);
   const [isEditingLocation, setIsEditingLocation] = useState(false);
@@ -93,7 +92,7 @@ export const UserProfileMenu: React.FC = () => {
     telegram.triggerHaptic('light');
   };
 
-  if (!isProfileMenuOpen) return null;
+  if (!isProfileMenuOpen && !showFeedbackModal) return null;
 
   const handleCopy = (text: string, fieldName: string) => {
     try {
@@ -184,9 +183,10 @@ export const UserProfileMenu: React.FC = () => {
 
   return (
     <AnimatePresence>
+      {isProfileMenuOpen && (
       <div
         id="user-profile-menu-backdrop"
-        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-md"
+        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/75 backdrop-blur-sm"
         onClick={closeProfileMenu}
       >
         <motion.div
@@ -195,135 +195,75 @@ export const UserProfileMenu: React.FC = () => {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-          className="bg-slate-900 border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+          className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-md shadow-xl overflow-hidden flex flex-col max-h-[92vh]"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Daily UI #005 Inspired Cover & Header Bar */}
-          <div className="relative border-b border-white/10 overflow-hidden bg-slate-950">
-            {/* Ambient Background Gradient Cover */}
-            <div className="h-32 w-full bg-gradient-to-r from-indigo-900 via-purple-950 to-slate-950 relative overflow-hidden">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(99,102,241,0.25),transparent_60%)]" />
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(245,158,11,0.2),transparent_50%)]" />
-              {/* Subtle Grid Lines overlay */}
-              <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff08_1px,transparent_1px),linear-gradient(to_bottom,#ffffff08_1px,transparent_1px)] bg-[size:16px_16px]" />
-
-              {/* Top Bar Actions */}
-              <div className="absolute top-3 right-3 left-3 flex items-center justify-between z-10">
-                <div className="flex items-center gap-2 bg-slate-950/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-[11px] font-bold text-white shadow-lg">
-                  <User className="w-3.5 h-3.5 text-amber-400" />
-                  <span>PLAYER PROFILE</span>
-                </div>
+          <div className="border-b border-white/10 bg-slate-900 px-5 py-4">
+            <div className="flex items-center gap-3">
+              <div className="relative shrink-0">
+                <img
+                  src={currentAvatarUrl}
+                  alt={user.displayName}
+                  referrerPolicy="no-referrer"
+                  className="h-14 w-14 rounded-2xl object-cover bg-slate-800"
+                />
                 <button
-                  onClick={() => {
-                    sound.playClick();
-                    closeProfileMenu();
-                  }}
-                  className="w-8 h-8 rounded-full bg-slate-950/70 backdrop-blur-md border border-white/15 hover:bg-slate-800 text-slate-300 hover:text-white flex items-center justify-center transition-all cursor-pointer shadow-lg"
+                  type="button"
+                  onClick={handleShuffleAvatar}
+                  className="absolute -bottom-1 -right-1 rounded-full bg-slate-800 p-1.5 text-slate-300 hover:text-amber-300 border border-white/10"
+                  title="Change avatar"
+                  aria-label="Change avatar"
                 >
-                  <X className="w-4 h-4" />
+                  <RefreshCw className="h-3 w-3" />
                 </button>
               </div>
-            </div>
-
-            {/* Avatar & Profile Identity Seam */}
-            <div className="px-5 pb-4 -mt-12 flex flex-col sm:flex-row items-center sm:items-end justify-between gap-3 relative z-10">
-              <div className="flex flex-col sm:flex-row items-center sm:items-end gap-3.5 text-center sm:text-left">
-                {/* Daily UI Avatar Ring */}
-                <div className="relative group">
-                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-amber-500 via-indigo-500 to-emerald-400 p-[2.5px] shadow-2xl relative">
-                    <img
-                      src={currentAvatarUrl}
-                      alt={user.displayName}
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full rounded-[14px] object-cover bg-slate-900"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleShuffleAvatar}
-                      className="absolute -top-2 -left-2 w-7 h-7 rounded-full bg-slate-900 border border-amber-400/60 text-amber-400 hover:text-white hover:bg-amber-500 flex items-center justify-center transition-all cursor-pointer shadow-xl group-hover:scale-110"
-                      title="Shuffle Cyber Bot Avatar"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  {/* Online Status Glow Dot */}
-                  <span className="absolute top-0 right-0 w-4 h-4 rounded-full bg-emerald-500 ring-4 ring-slate-950 shadow-md flex items-center justify-center">
-                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-                  </span>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex items-center justify-center sm:justify-start gap-2">
-                    <h2 className="text-lg font-black text-white tracking-tight">
-                      {user.actualName || user.displayName}
-                    </h2>
-                    <span className="text-[10px] bg-sky-500/20 text-sky-300 px-2 py-0.5 rounded-full border border-sky-500/40 font-bold tracking-wider flex items-center gap-1">
-                      <Send className="w-3 h-3 text-sky-400" />
-                      <span>TELEGRAM VERIFIED</span>
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-center sm:justify-start gap-2 text-xs">
-                    <button
-                      onClick={() => handleCopy(`@${user.username}`, 'username')}
-                      className="font-mono text-slate-300 hover:text-amber-400 flex items-center gap-1 font-semibold transition-colors group cursor-pointer"
-                    >
-                      <span>@{user.username}</span>
-                      {copiedField === 'username' ? (
-                        <Check className="w-3 h-3 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-3 h-3 opacity-60 group-hover:opacity-100" />
-                      )}
-                    </button>
-                    <span className="text-slate-600">•</span>
-                    <span className="text-indigo-400 font-bold text-[11px] bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/20">
-                      {user.tier}
-                    </span>
-                  </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-base font-semibold text-white">{user.actualName || user.displayName}</h2>
+                <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
+                  <button
+                    onClick={() => handleCopy(`@${user.username}`, 'username')}
+                    className="flex items-center gap-1 hover:text-amber-300"
+                  >
+                    <span>@{user.username}</span>
+                    {copiedField === 'username' ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                  </button>
+                  <span className="text-slate-600">·</span>
+                  <span>{user.tier}</span>
                 </div>
               </div>
-
-              {/* Rank Badge */}
-              <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-amber-500/30 text-amber-400 font-bold text-xs shadow-lg">
-                <Trophy className="w-4 h-4 text-amber-400 animate-pulse" />
-                <span className="font-mono">Rank #{user.rank}</span>
+              <div className="text-right text-xs text-slate-400">
+                <div>Rank</div>
+                <div className="mt-0.5 font-semibold text-amber-300">#{user.rank}</div>
               </div>
+              <button
+                onClick={() => {
+                  sound.playClick();
+                  closeProfileMenu();
+                }}
+                className="ml-1 rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white"
+                aria-label="Close profile"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
-
-            {/* Daily UI #005 Metric Pills Bar */}
-            <div className="px-5 pb-4">
-              <div className="grid grid-cols-3 gap-2 bg-slate-900/70 p-2.5 rounded-2xl border border-white/10 backdrop-blur-md">
-                <div className="text-center p-1.5 rounded-xl bg-slate-950/50 border border-white/5">
-                  <div className="text-[10px] text-slate-400 font-medium flex items-center justify-center gap-1 mb-0.5">
-                    <Layers className="w-3 h-3 text-indigo-400" />
-                    <span>Matches</span>
-                  </div>
-                  <div className="text-sm font-black text-white font-mono">{user.totalWagers}</div>
-                </div>
-
-                <div className="text-center p-1.5 rounded-xl bg-slate-950/50 border border-white/5">
-                  <div className="text-[10px] text-slate-400 font-medium flex items-center justify-center gap-1 mb-0.5">
-                    <Award className="w-3 h-3 text-emerald-400" />
-                    <span>Win Rate</span>
-                  </div>
-                  <div className="text-sm font-black text-emerald-400 font-mono">{user.winRate}%</div>
-                </div>
-
-                <div className="text-center p-1.5 rounded-xl bg-slate-950/50 border border-white/5">
-                  <div className="text-[10px] text-slate-400 font-medium flex items-center justify-center gap-1 mb-0.5">
-                    <Wallet className="w-3 h-3 text-amber-400" />
-                    <span>Balance</span>
-                  </div>
-                  <div className="text-sm font-black text-amber-400 font-mono truncate">
-                    ₦{user.availableBalance.toLocaleString()}
-                  </div>
-                </div>
+            <div className="mt-4 grid grid-cols-3 divide-x divide-white/10 border-t border-white/10 pt-3 text-center">
+              <div>
+                <div className="text-[10px] text-slate-500">Matches</div>
+                <div className="mt-1 text-sm font-semibold text-white">{user.totalWagers}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500">Win rate</div>
+                <div className="mt-1 text-sm font-semibold text-emerald-300">{user.winRate}%</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500">Balance</div>
+                <div className="mt-1 text-sm font-semibold text-amber-300">₦{user.availableBalance.toLocaleString()}</div>
               </div>
             </div>
           </div>
 
           {/* Segmented Tab Switcher with Animated Indicator */}
-          <div className="px-5 pt-3 pb-2 bg-slate-950/80 border-b border-white/10 flex gap-2 relative">
+          <div className="px-4 py-3 bg-slate-900 border-b border-white/10 flex gap-2">
             <button
               onClick={() => {
                 setActiveTab('profile');
@@ -331,7 +271,7 @@ export const UserProfileMenu: React.FC = () => {
               }}
               className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer relative z-10 ${
                 activeTab === 'profile'
-                  ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 font-black'
+                  ? 'bg-white/10 text-white font-semibold'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
               }`}
             >
@@ -346,7 +286,7 @@ export const UserProfileMenu: React.FC = () => {
               }}
               className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer relative z-10 ${
                 activeTab === 'notifications'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 font-black'
+                  ? 'bg-white/10 text-white font-semibold'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
               }`}
             >
@@ -359,53 +299,11 @@ export const UserProfileMenu: React.FC = () => {
               )}
             </button>
 
-            <button
-              onClick={() => {
-                setActiveTab('feedback');
-                sound.playClick();
-              }}
-              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer relative z-10 ${
-                activeTab === 'feedback'
-                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 font-black'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
-              }`}
-            >
-              <MessageSquarePlus className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">Support</span>
-            </button>
           </div>
 
           {/* Tab 1: Profile & Identity View */}
           {activeTab === 'profile' && (
             <div className="p-5 overflow-y-auto space-y-4 text-xs">
-              {/* ChopAm Live Help & Support Desk Trigger */}
-              <button
-                type="button"
-                onClick={() => {
-                  sound.playClick();
-                  telegram.triggerHaptic('medium');
-                  closeProfileMenu();
-                  window.dispatchEvent(new CustomEvent('open_live_chat'));
-                }}
-                className="w-full p-3.5 rounded-2xl bg-gradient-to-r from-indigo-950/90 via-slate-900 to-slate-950 border border-indigo-500/40 hover:border-amber-400/60 text-slate-100 font-bold text-xs flex items-center justify-between shadow-xl transition-all cursor-pointer group hover:scale-[1.01]"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-amber-500 p-[1px] shrink-0">
-                    <div className="w-full h-full bg-slate-900 rounded-[11px] flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
-                      <Headphones className="w-5 h-5" />
-                    </div>
-                  </div>
-                  <div className="text-left min-w-0">
-                    <span className="block font-bold text-white text-xs leading-tight">ChopAm Live Help & Support</span>
-                    <span className="text-[10px] text-slate-400 font-normal">Instant 1-on-1 agent assistance desk</span>
-                  </div>
-                </div>
-                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center gap-1.5 shrink-0">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                  <span>Live Agent Online</span>
-                </span>
-              </button>
-
               {/* Identity Detail Grid */}
               <div className="space-y-3">
                 {/* 1. Username field */}
@@ -960,7 +858,7 @@ export const UserProfileMenu: React.FC = () => {
               </div>
 
               {/* Bug Report & Feature Request Direct Trigger Card */}
-              <div className="p-3.5 bg-gradient-to-r from-indigo-950/60 to-purple-950/60 rounded-2xl border border-indigo-500/20 flex items-center justify-between gap-3">
+              <div className="p-3.5 bg-slate-950/40 rounded-xl border border-white/10 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
                     <MessageSquarePlus className="w-4 h-4" />
@@ -974,10 +872,11 @@ export const UserProfileMenu: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setActiveTab('feedback');
                     sound.playClick();
+                    setShowFeedbackModal(true);
+                    closeProfileMenu();
                   }}
-                  className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] flex items-center gap-1 transition-all cursor-pointer shadow-md shrink-0"
+                  className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-[11px] flex items-center gap-1 transition-colors cursor-pointer shrink-0"
                 >
                   <span>Give Feedback</span>
                   <ArrowRight className="w-3 h-3" />
@@ -1131,41 +1030,70 @@ export const UserProfileMenu: React.FC = () => {
             </div>
           )}
 
-          {/* Tab 3: Bug Report & Feature Suggestion Form */}
-          {activeTab === 'feedback' && (
-            <div className="p-5 overflow-y-auto space-y-4 text-xs flex-1">
-              <div className="flex items-center justify-between pb-2 border-b border-white/10">
+        </motion.div>
+      </div>
+      )}
+
+      {showFeedbackModal && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/75 p-3 backdrop-blur-sm sm:p-6"
+          onClick={() => setShowFeedbackModal(false)}
+        >
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="feedback-modal-title"
+            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.98 }}
+            transition={{ duration: 0.18 }}
+            className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between border-b border-white/10 px-5 py-4">
+              <div>
+                <h2 id="feedback-modal-title" className="text-base font-semibold text-white">Support & Feedback</h2>
+                <p className="mt-1 text-xs text-slate-400">Tell us what happened or what you’d like to see next.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowFeedbackModal(false)}
+                className="rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white"
+                aria-label="Close feedback"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-4">
+              <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/50 p-3">
                 <div>
-                  <h3 className="font-bold text-white text-sm flex items-center gap-2">
-                    <span>Feedback & Feature Suggestions</span>
-                  </h3>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    Help us shape Nigeria’s premier real-stakes skill gaming network.
+                  <h3 className="text-xs font-semibold text-white">ChopAm Live Help & Support</h3>
+                  <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+                    Get help with deposits, withdrawals, and game rules through live chat. Use the form below to report a problem or suggest a feature.
                   </p>
                 </div>
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[10px] font-semibold">
-                  <Sparkles className="w-3 h-3 text-emerald-400" />
-                  <span>Dev Team Monitored</span>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowFeedbackModal(false);
+                    window.dispatchEvent(new CustomEvent('open_live_chat'));
+                  }}
+                  className="shrink-0 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-300 hover:bg-white/5"
+                >
+                  Live chat
+                </button>
               </div>
 
               <FeedbackForm
-                user={{
-                  id: user.id || 'usr_current',
-                  username: user.username,
-                  email: user.email,
-                }}
-                onSuccess={() => {
-                  setTimeout(() => {
-                    setActiveTab('profile');
-                  }, 2000);
-                }}
-                onCancel={() => setActiveTab('profile')}
+                user={{ id: user.id || 'usr_current', username: user.username, email: user.email }}
+                onSuccess={() => setShowFeedbackModal(false)}
+                onCancel={() => setShowFeedbackModal(false)}
               />
             </div>
-          )}
-        </motion.div>
-      </div>
+          </motion.div>
+        </div>
+      )}
     </AnimatePresence>
   );
 };

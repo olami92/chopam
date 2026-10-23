@@ -1,22 +1,28 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GameProvider, useGame } from './context/GameContext';
 import { TopBar } from './components/TopBar';
 import { BottomNav } from './components/BottomNav';
 import { AuthModal } from './components/AuthModal';
-import { LandingPage } from './screens/LandingPage';
-import { ArenaScreen } from './screens/ArenaScreen';
-import { LobbyScreen } from './screens/LobbyScreen';
-import { WalletScreen } from './screens/WalletScreen';
-import { AnalyticsScreen } from './screens/AnalyticsScreen';
-import { AdminDashboardScreen } from './screens/AdminDashboardScreen';
-import { WhotGameScreen } from './screens/WhotGameScreen';
-import { LudoGameScreen } from './screens/LudoGameScreen';
-import { DraughtsGameScreen } from './screens/DraughtsGameScreen';
-import { Bead16GameScreen } from './screens/Bead16GameScreen';
-import { WaitingRoomModal } from './components/WaitingRoomModal';
-import { GameReplayModal } from './components/replay/GameReplayModal';
-import { LiveChatWidget } from './components/LiveChatWidget';
+const LandingPage = lazy(() => import('./screens/LandingPage').then((module) => ({ default: module.LandingPage })));
+const ArenaScreen = lazy(() => import('./screens/ArenaScreen').then((module) => ({ default: module.ArenaScreen })));
+const LobbyScreen = lazy(() => import('./screens/LobbyScreen').then((module) => ({ default: module.LobbyScreen })));
+const WalletScreen = lazy(() => import('./screens/WalletScreen').then((module) => ({ default: module.WalletScreen })));
+const AnalyticsScreen = lazy(() => import('./screens/AnalyticsScreen').then((module) => ({ default: module.AnalyticsScreen })));
+const AdminDashboardScreen = lazy(() => import('./screens/AdminDashboardScreen').then((module) => ({ default: module.AdminDashboardScreen })));
+const WhotGameScreen = lazy(() => import('./screens/WhotGameScreen').then((module) => ({ default: module.WhotGameScreen })));
+const LudoGameScreen = lazy(() => import('./screens/LudoGameScreen').then((module) => ({ default: module.LudoGameScreen })));
+const DraughtsGameScreen = lazy(() => import('./screens/DraughtsGameScreen').then((module) => ({ default: module.DraughtsGameScreen })));
+const Bead16GameScreen = lazy(() => import('./screens/Bead16GameScreen').then((module) => ({ default: module.Bead16GameScreen })));
+const WaitingRoomModal = lazy(() => import('./components/WaitingRoomModal').then((module) => ({ default: module.WaitingRoomModal })));
+const GameReplayModal = lazy(() => import('./components/replay/GameReplayModal').then((module) => ({ default: module.GameReplayModal })));
+const LiveChatWidget = lazy(() => import('./components/LiveChatWidget').then((module) => ({ default: module.LiveChatWidget })));
+
+const ScreenLoading: React.FC = () => (
+  <div className="flex min-h-[40vh] items-center justify-center text-sm text-slate-400" role="status">
+    Loading game…
+  </div>
+);
 
 const tabVariants = {
   initial: {
@@ -112,17 +118,19 @@ const AppRoot: React.FC = () => {
   // Standalone Admin Hub View (accessible via footer or secret admin trigger)
   const isAdminActive = isStandaloneAdminOpen || Boolean(typeof window !== 'undefined' && localStorage.getItem('skillstake_admin_token'));
   if (isAdminActive) {
-    return <AdminDashboardScreen onExitAdmin={handleExitAdmin} />;
+    return <Suspense fallback={<ScreenLoading />}><AdminDashboardScreen onExitAdmin={handleExitAdmin} /></Suspense>;
   }
 
   // 1. If not authenticated, present the Web Landing Page
   if (!isAuthenticated) {
     return (
       <>
+        <Suspense fallback={<ScreenLoading />}>
         <LandingPage
           onOpenAuth={(tab) => openAuthModal(tab)}
           onOpenAdmin={() => setIsStandaloneAdminOpen(true)}
         />
+        </Suspense>
         <AuthModal />
       </>
     );
@@ -144,7 +152,9 @@ const AppRoot: React.FC = () => {
 
       {/* Main Responsive Content Area */}
       <main className="flex-1 flex flex-col min-h-0 relative w-full">
-        <MainAppContent />
+          <Suspense fallback={<ScreenLoading />}>
+            <MainAppContent />
+          </Suspense>
       </main>
 
       {/* Mobile & Telegram Mini App Bottom Navigation (hidden on desktop md+) */}
@@ -154,7 +164,7 @@ const AppRoot: React.FC = () => {
       <AuthModal />
 
       {/* Game Replay Modal */}
-      {activeReplay && <GameReplayModal replay={activeReplay} onClose={closeReplay} />}
+      {activeReplay && <Suspense fallback={null}><GameReplayModal replay={activeReplay} onClose={closeReplay} /></Suspense>}
     </div>
   );
 };
@@ -163,7 +173,7 @@ export default function App() {
   return (
     <GameProvider>
       <AppRoot />
-      <LiveChatWidget />
+      <Suspense fallback={null}><LiveChatWidget /></Suspense>
     </GameProvider>
   );
 }

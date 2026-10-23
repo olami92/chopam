@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useGame } from '../context/GameContext';
 import {
@@ -9,14 +9,14 @@ import {
   Wallet,
   BarChart3,
   ShieldCheck,
-  Headphones,
   Coins,
 } from 'lucide-react';
 import { sound } from '../services/audio';
 import { EscrowApiService } from '../services/escrowService';
-import { DepositModal } from './DepositModal';
 import { UserProfileMenu } from './UserProfileMenu';
 import { TabType } from '../types';
+
+const DepositModal = lazy(() => import('./DepositModal').then((module) => ({ default: module.DepositModal })));
 
 export const TopBar: React.FC = () => {
   const {
@@ -104,10 +104,6 @@ export const TopBar: React.FC = () => {
                   <span className="font-bold text-xs tracking-tight text-white group-hover:text-amber-400 transition-colors truncate max-w-[110px] sm:max-w-none">
                     @{user.username}
                   </span>
-                  <span className="text-[9px] bg-sky-500/20 text-sky-300 px-1.5 py-0.2 rounded-full border border-sky-500/30 font-bold tracking-wider flex items-center gap-0.5">
-                    <Send className="w-2.5 h-2.5 text-sky-400" />
-                    <span>TELEGRAM READY</span>
-                  </span>
                 </div>
                 <span className="text-[10px] font-medium text-slate-400 block truncate">
                   {user.actualName || user.displayName}
@@ -148,7 +144,7 @@ export const TopBar: React.FC = () => {
             })}
           </nav>
 
-          {/* Right Action Group: Balance and Support */}
+          {/* Right Action Group: Cash and Tete Coin balances */}
           <div className="flex items-center gap-2">
             {/* Balance Pill */}
             <button
@@ -177,25 +173,11 @@ export const TopBar: React.FC = () => {
               <span className="font-black text-xs tabular-nums">{teteCoinBalance.toLocaleString()}</span>
             </div>
 
-            {/* Live Support Trigger */}
-            <button
-              id="btn-live-support-toggle"
-              onClick={() => {
-                sound.playClick();
-                window.dispatchEvent(new CustomEvent('open_live_chat'));
-              }}
-              aria-label="Live Support Desk"
-              title="Open ChopAm Live Support Desk"
-              className="p-1.5 rounded-xl bg-slate-900/60 hover:bg-slate-800 border border-white/10 text-slate-400 hover:text-amber-400 transition-colors cursor-pointer relative"
-            >
-              <Headphones className="w-4 h-4 text-amber-400" />
-            </button>
-
           </div>
         </div>
       </header>
 
-      {showDeposit && <DepositModal onClose={() => setShowDeposit(false)} />}
+      {showDeposit && <Suspense fallback={null}><DepositModal onClose={() => setShowDeposit(false)} /></Suspense>}
       <UserProfileMenu />
     </>
   );
