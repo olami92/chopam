@@ -1,0 +1,17 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+Thumbs.db
+*.log
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+users_data.json
+withdrawals_data.json
+match_telegram_recipients.json
+*.sqlite
+*.sqlite3
+*.db
