@@ -21,6 +21,7 @@ import {
   Swords,
 } from 'lucide-react';
 import { sound } from '../services/audio';
+import { telegram } from '../services/telegram';
 
 interface LandingPageProps {
   onOpenAuth: (tab: 'signin' | 'register') => void;
@@ -31,6 +32,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onOpenAdmi
   const { loginAsDemo, loginWithTelegram } = useGame();
 
   const handleStartDemo = () => {
+    // Always start the Tete-coin demo regardless of environment.
+    // Telegram users who are already signed in (or who sign in via the
+    // dedicated "Play on Telegram" button) don't need to be redirected to
+    // a sign-up page when they just want to try the demo.
     sound.playClick();
     loginAsDemo();
   };
