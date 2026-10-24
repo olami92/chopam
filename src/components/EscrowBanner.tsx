@@ -47,8 +47,48 @@ export const EscrowBanner: React.FC<EscrowBannerProps> = ({ gameTitle }) => {
     <>
       <div
         id="in-game-escrow-banner"
-        className="w-full bg-slate-900/80 backdrop-blur-md border-b border-white/10 px-3.5 py-2.5 flex items-center justify-between gap-2 shadow-md"
+        className={`w-full bg-slate-900/80 backdrop-blur-md border-b border-white/10 px-3.5 shadow-md ${activeMatch.coinMatchId ? 'py-2.5' : 'py-2.5 flex items-center justify-between gap-2'}`}
       >
+        {activeMatch.coinMatchId ? (
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[10px] font-bold text-amber-200">
+                <ShieldCheck className="h-3 w-3 text-amber-300" />
+                <span>TETE COIN MATCH</span>
+              </div>
+              <span className="truncate text-xs font-black text-amber-300">
+                {activeMatch.stake.toLocaleString()} Tete Coins staked
+              </span>
+            </div>
+            <button
+              onClick={handleOpenRules}
+              title="View Game Rules & Mechanics"
+              className="flex items-center gap-1 rounded-lg border border-white/10 bg-slate-800/80 px-2 py-1.5 text-[10px] font-bold text-slate-300 transition-colors hover:bg-slate-700"
+            >
+              <BookOpen className="h-3.5 w-3.5 text-amber-400" />
+              <span>Rules</span>
+            </button>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wider text-slate-500">Match ID</span>
+              <button
+                onClick={handleCopyCode}
+                title="Copy Match ID"
+                className="flex min-w-0 items-center gap-1 rounded-md border border-white/10 bg-slate-950/70 px-2 py-1 text-[10px] font-mono text-slate-300"
+              >
+                <span className="truncate">{activeMatch.roomCode}</span>
+                {copied ? <Check className="h-3 w-3 shrink-0 text-emerald-400" /> : <Copy className="h-3 w-3 shrink-0 text-slate-400" />}
+              </button>
+            </div>
+            <button
+              onClick={() => setShowConfirmQuit(true)}
+              title="Cancel Match"
+              className="flex items-center justify-center gap-1 rounded-lg border border-rose-400/25 bg-rose-500/10 px-2.5 py-1.5 text-[10px] font-bold text-rose-300 transition-colors hover:bg-rose-500/20"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span>Cancel</span>
+            </button>
+          </div>
+        ) : <>
         {/* Left: Escrow & Pot info */}
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold shrink-0 shadow-[0_0_8px_rgba(16,185,129,0.3)]">
@@ -109,6 +149,7 @@ export const EscrowBanner: React.FC<EscrowBannerProps> = ({ gameTitle }) => {
             <LogOut className="w-3.5 h-3.5" />
           </button>
         </div>
+        </>}
       </div>
 
       {/* Live WebRTC P2P Voice Chat Bar */}
