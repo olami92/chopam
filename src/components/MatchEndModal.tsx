@@ -16,6 +16,7 @@ export const MatchEndModal: React.FC<MatchEndModalProps> = ({ winner, onPlayAgai
   const { activeMatch, user, escrowHistory, openReplay } = useGame();
   const [copied, setCopied] = useState(false);
   const isWin = winner === 'player';
+  const isCoinMatch = Boolean(activeMatch?.coinMatchId);
 
   useEffect(() => {
     if (isWin) {
@@ -60,8 +61,12 @@ export const MatchEndModal: React.FC<MatchEndModalProps> = ({ winner, onPlayAgai
   const netWon = isWin ? activeMatch.pot - activeMatch.stake : -activeMatch.stake;
 
   const displayedVaultBalance = useMemo(() => {
-    return Math.max(0, user.availableBalance);
-  }, [user.availableBalance]);
+    return Math.max(0, isCoinMatch ? user.coinBalance : user.availableBalance);
+  }, [isCoinMatch, user.coinBalance, user.availableBalance]);
+
+  const formatAmount = (amount: number) => amount.toLocaleString(isCoinMatch ? 'en-US' : 'en-NG', {
+    ...(isCoinMatch ? {} : { minimumFractionDigits: 2 }),
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-300">
@@ -85,11 +90,11 @@ export const MatchEndModal: React.FC<MatchEndModalProps> = ({ winner, onPlayAgai
             {isWin ? 'VICTORY!' : 'DEFEAT'}
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            {isWin ? 'Pot securely settled into your vault' : 'Better luck in the next battle'}
+            {isWin ? (isCoinMatch ? 'Tete Coins added to your balance' : 'Pot securely settled into your vault') : 'Better luck in the next battle'}
           </p>
         </div>
 
-        {isWin && (
+        {isWin && !isCoinMatch && (
           <WinnerShareCard
             playerName={user.username}
             opponentUsername={activeMatch.opponent.username}
@@ -102,13 +107,13 @@ export const MatchEndModal: React.FC<MatchEndModalProps> = ({ winner, onPlayAgai
         <div className="w-full bg-slate-950/70 border border-white/10 rounded-2xl p-4 space-y-2.5 text-left">
           <div className="flex items-center justify-between text-xs">
             <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Match Stake</span>
-            <span className="font-semibold text-slate-200">₦{activeMatch.stake.toLocaleString()}</span>
+            <span className="font-semibold text-slate-200">{isCoinMatch ? `${formatAmount(activeMatch.stake)} Tete Coins` : `₦${formatAmount(activeMatch.stake)}`}</span>
           </div>
 
           <div className="flex items-center justify-between text-xs">
             <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Pot Settlement</span>
             <span className="font-semibold text-slate-200">
-              {isWin ? `₦${activeMatch.pot.toLocaleString()}` : '₦0.00'}
+              {isWin ? (isCoinMatch ? `${formatAmount(activeMatch.pot)} Tete Coins` : `₦${formatAmount(activeMatch.pot)}`) : (isCoinMatch ? '0 Tete Coins' : '₦0.00')}
             </span>
           </div>
 
@@ -119,12 +124,14 @@ export const MatchEndModal: React.FC<MatchEndModalProps> = ({ winner, onPlayAgai
                 isWin ? 'text-emerald-400' : 'text-rose-400'
               }`}
             >
-              {isWin ? `+₦${netWon.toLocaleString()}` : `-₦${activeMatch.stake.toLocaleString()}`}
+              {isCoinMatch
+                ? `${isWin ? '+' : '-'}${formatAmount(isWin ? netWon : activeMatch.stake)} Tete Coins`
+                : (isWin ? `+₦${formatAmount(netWon)}` : `-₦${formatAmount(activeMatch.stake)}`)}
             </span>
           </div>
 
           {/* Smart Contract Proof - Static, Copyable & Polygonscan Verifiable */}
-          <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[10px] text-slate-400">
+          {!isCoinMatch && <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[10px] text-slate-400">
             <span className="flex items-center gap-1 text-emerald-400 font-bold bg-emerald-500/15 border border-emerald-500/20 px-2 py-0.5 rounded-full">
               <CheckCircle2 className="w-3 h-3" />
               Escrow Finalized
@@ -152,7 +159,7 @@ export const MatchEndModal: React.FC<MatchEndModalProps> = ({ winner, onPlayAgai
                 <ExternalLink className="w-3 h-3" />
               </a>
             </div>
-          </div>
+          </div>}
         </div>
 
         {/* Prominent Verified Vault Balance Card */}
@@ -163,10 +170,10 @@ export const MatchEndModal: React.FC<MatchEndModalProps> = ({ winner, onPlayAgai
             </div>
             <div>
               <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                Updated Vault Balance
+                {isCoinMatch ? 'Updated Tete Coin Balance' : 'Updated Vault Balance'}
               </div>
               <div className="text-sm font-black text-amber-400 tracking-tight">
-                ₦{displayedVaultBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+                {isCoinMatch ? `${formatAmount(displayedVaultBalance)} Tete Coins` : `₦${formatAmount(displayedVaultBalance)}`}
               </div>
             </div>
           </div>
@@ -177,7 +184,9 @@ export const MatchEndModal: React.FC<MatchEndModalProps> = ({ winner, onPlayAgai
                 : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
             }`}
           >
-            {isWin ? `+₦${activeMatch.pot.toLocaleString()} Pot Won` : `-₦${activeMatch.stake.toLocaleString()} Stake Lost`}
+            {isWin
+              ? (isCoinMatch ? `+${formatAmount(activeMatch.pot)} Coins Won` : `+₦${formatAmount(activeMatch.pot)} Pot Won`)
+              : (isCoinMatch ? `-${formatAmount(activeMatch.stake)} Coins Lost` : `-₦${formatAmount(activeMatch.stake)} Stake Lost`)}
           </div>
         </div>
 
