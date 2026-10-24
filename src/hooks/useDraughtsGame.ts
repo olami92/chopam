@@ -56,6 +56,7 @@ export function useDraughtsGame(onGameOver: (winner: 'player' | 'opponent') => v
   const [lastAction, setLastAction] = useState<string>('10x10 Draughts match began');
   const [chainPieceId, setChainPieceId] = useState<string | null>(null);
   const aiThinkingRef = useRef(false);
+  const coinMovePendingRef = useRef(false);
 
   const isP2P = activeMatch?.isVsAi === false;
   const isHost = activeMatch
@@ -592,7 +593,13 @@ export function useDraughtsGame(onGameOver: (winner: 'player' | 'opponent') => v
       const matchedMove = validMoves.find((m) => m.toRow === row && m.toCol === col);
       if (matchedMove) {
         if (activeMatch?.coinMatchId) {
-          void submitCoinAiAction({ type: 'draughts_move', fromRow: matchedMove.fromRow, fromCol: matchedMove.fromCol, toRow: matchedMove.toRow, toCol: matchedMove.toCol });
+          if (coinMovePendingRef.current) return;
+          coinMovePendingRef.current = true;
+          // Apply the move locally so the piece responds immediately. The server
+          // remains authoritative and publishes its validated state on completion.
+          executeMove(matchedMove, true);
+          void submitCoinAiAction({ type: 'draughts_move', fromRow: matchedMove.fromRow, fromCol: matchedMove.fromCol, toRow: matchedMove.toRow, toCol: matchedMove.toCol })
+            .finally(() => { coinMovePendingRef.current = false; });
           return;
         }
         executeMove(matchedMove, true);
