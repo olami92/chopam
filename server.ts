@@ -412,6 +412,11 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', time: Date.now() });
 });
 
+// Lightweight liveness endpoint for external cron jobs.
+app.get('/ping', (_req, res) => {
+  res.status(200).send('pong');
+});
+
 // Telegram Bot Webhook Endpoint for Inbound Admin Messages (Protocol 2)
 app.post('/api/telegram/webhook', async (req, res) => {
   try {
