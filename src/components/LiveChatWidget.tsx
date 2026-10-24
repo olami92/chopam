@@ -59,7 +59,7 @@ export const LiveChatWidget: React.FC = () => {
       {
         id: 'msg_welcome',
         sender: 'support',
-        text: '👋 Welcome to SkillStake Live Support! How can we assist you with deposits, withdrawals, or game rules today?',
+        text: '👋 Welcome to Tete Arena Live Support! How can we assist you with deposits, withdrawals, or game rules today?',
         timestamp: Date.now(),
       },
     ]);

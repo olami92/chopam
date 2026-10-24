@@ -644,7 +644,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ onEx
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <div>
-                <h1 className="text-base font-black text-white tracking-tight">SkillStake Admin</h1>
+                <h1 className="text-base font-black text-white tracking-tight">Tete Arena Admin</h1>
                 <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   Super Admin
                 </span>
@@ -1703,7 +1703,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ onEx
                         type="text"
                         value={bankSettings.accountName}
                         onChange={(e) => setBankSettings((prev) => ({ ...prev, accountName: e.target.value }))}
-                        placeholder="e.g. SkillStake Escrow Gaming Ltd"
+                        placeholder="e.g. Tete Arena"
                         className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2.5 text-xs font-semibold text-white focus:outline-none focus:border-purple-500"
                         required
                       />

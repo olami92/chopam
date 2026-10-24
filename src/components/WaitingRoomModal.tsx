@@ -19,7 +19,7 @@ export const WaitingRoomModal: React.FC = () => {
     draughts: '10x10 International Draughts',
   };
 
-  const gameTitle = gameModeTitles[activeMatch.gameMode] || 'SkillStake Match';
+  const gameTitle = gameModeTitles[activeMatch.gameMode] || 'Tete Arena Match';
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(activeMatch.roomCode);
@@ -35,7 +35,7 @@ export const WaitingRoomModal: React.FC = () => {
   };
 
   const handleCopyInviteLink = () => {
-    const inviteText = `🎮 Join my ${gameTitle} wager match on SkillStake!\nStake: ₦${activeMatch.stake.toLocaleString()} | Pot: ₦${activeMatch.pot.toLocaleString()}\nRoom Code: ${activeMatch.roomCode}\n\nEnter code ${activeMatch.roomCode} in SkillStake to play against @${user.username}!`;
+    const inviteText = `🎮 Join my ${gameTitle} wager match on Tete Arena!\nStake: ₦${activeMatch.stake.toLocaleString()} | Pot: ₦${activeMatch.pot.toLocaleString()}\nRoom Code: ${activeMatch.roomCode}\n\nEnter code ${activeMatch.roomCode} in Tete Arena to play against @${user.username}!`;
     navigator.clipboard.writeText(inviteText);
     setCopiedLink(true);
     sound.playClick();

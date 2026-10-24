@@ -90,7 +90,7 @@ export const ArenaScreen: React.FC = () => {
             status: 'SETTLED',
           },
           message: isFiat
-            ? 'Verified via SkillStake Cryptographic Audit Ledger & NIP Bank Session Proof. Matched with NIBSS settlement gateway.'
+            ? 'Verified via Tete Arena Cryptographic Audit Ledger & NIP Bank Session Proof. Matched with NIBSS settlement gateway.'
             : 'Verified on-chain via Polygon PoS Smart Contract Escrow.',
         });
       }

@@ -75,7 +75,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({ onClose }) => {
   const [platformBank, setPlatformBank] = useState<{ bankName: string; accountNumber: string; accountName: string }>({
     bankName: 'OPAY / Kuda Bank',
     accountNumber: '903 847 2910',
-    accountName: 'SkillStake Escrow Gaming Ltd',
+    accountName: 'Tete Arena',
   });
   const [isLoadingBank, setIsLoadingBank] = useState(false);
   const [amountNgn, setAmountNgn] = useState<number>(5000);
@@ -496,7 +496,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({ onClose }) => {
               <Zap className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-black text-white">SkillStake Deposit Vault</h2>
+              <h2 className="text-base font-black text-white">Tete Arena Deposit Vault</h2>
               <p className="text-[11px] text-purple-300">Instant NGN Fiat Bank Transfer & Polygon USDT</p>
             </div>
           </div>

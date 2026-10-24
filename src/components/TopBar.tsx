@@ -70,7 +70,7 @@ export const TopBar: React.FC = () => {
               <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
                 <ShieldCheck className="w-4 h-4" />
               </div>
-              <span className="font-black text-sm text-white tracking-tight">SkillStake</span>
+              <span className="font-black text-sm text-white tracking-tight">Tete Arena</span>
             </div>
 
             {/* User Profile Pill (Interactive click to view user profile & notification center) */}

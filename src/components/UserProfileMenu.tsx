@@ -864,7 +864,7 @@ export const UserProfileMenu: React.FC = () => {
                     <MessageSquarePlus className="w-4 h-4" />
                   </div>
                   <div>
-                    <h4 className="font-bold text-white text-xs">Help Us Build SkillStake</h4>
+                    <h4 className="font-bold text-white text-xs">Help Us Build Tete Arena</h4>
                     <p className="text-[10px] text-slate-400">Found a bug or have an awesome feature idea?</p>
                   </div>
                 </div>

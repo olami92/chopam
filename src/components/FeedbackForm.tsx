@@ -313,7 +313,7 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ user, onSuccess, onC
           placeholder={
             feedbackType === 'bug'
               ? 'What happened, what did you expect to happen, and what device/browser were you using?'
-              : 'Describe the feature and why it would improve your gaming experience on SkillStake.'
+              : 'Describe the feature and why it would improve your gaming experience on Tete Arena.'
           }
           rows={3}
           maxLength={500}

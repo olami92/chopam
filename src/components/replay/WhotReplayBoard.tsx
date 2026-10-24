@@ -150,7 +150,7 @@ export const WhotReplayBoard: React.FC<WhotReplayBoardProps> = ({ snapshot, acto
       {/* Player Hand Cards */}
       <div className="w-full bg-slate-900/90 border border-white/10 p-3.5 rounded-2xl space-y-2">
         <div className="flex items-center justify-between text-xs">
-          <span className="font-bold text-slate-300">Your Hand (SkillStake Player):</span>
+          <span className="font-bold text-slate-300">Your Hand (Tete Arena Player):</span>
           <span className="font-mono text-xs font-black text-emerald-400">
             {player1Hand.length} Cards Remaining
           </span>

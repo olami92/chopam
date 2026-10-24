@@ -172,7 +172,7 @@ const INITIAL_MOCK_USER = EMPTY_USER_PROFILE;
 const WELCOME_NOTIFICATIONS: AppNotification[] = [
   {
     id: 'notif_welcome',
-    title: 'Welcome to SkillStake Arena!',
+    title: 'Welcome to Tete Arena!',
     message: 'Your account is ready. Deposit funds to join high-stakes matches or create open wager tables.',
     type: 'system',
     timestamp: 'Just now',

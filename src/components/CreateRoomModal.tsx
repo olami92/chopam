@@ -69,7 +69,7 @@ export const CreateRoomModal: React.FC<CreateRoomModalProps> = ({ onClose, initi
 
   const handleCopyFullInvite = () => {
     const gameTitle = gameOptions.find((g) => g.id === selectedGame)?.title || 'Game';
-    const text = `🎮 Join my private SkillStake match!\nGame: ${gameTitle}\nStake: ₦${selectedStake.toLocaleString()}\nRoom Code: ${roomCode}\n\nOpen the match: ${telegram.getMatchDeepLink(roomCode)}`;
+    const text = `🎮 Join my private Tete Arena match!\nGame: ${gameTitle}\nStake: ₦${selectedStake.toLocaleString()}\nRoom Code: ${roomCode}\n\nOpen the match: ${telegram.getMatchDeepLink(roomCode)}`;
     navigator.clipboard.writeText(text);
     setCopiedFull(true);
     sound.playClick();

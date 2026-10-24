@@ -1,6 +1,6 @@
-# SkillStake
+# Tete Arena
 
-SkillStake is a Telegram-first multiplayer skill gaming platform. It brings classic games into Telegram Mini Apps, with room invites, asynchronous turns, match sharing, and a platform coin wallet for cosmetic rewards.
+Tete Arena is a Telegram-first multiplayer skill gaming platform. It brings classic games into Telegram Mini Apps, with room invites, asynchronous turns, match sharing, and a platform coin wallet for cosmetic rewards.
 
 ## Games and player features
 

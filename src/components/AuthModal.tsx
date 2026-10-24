@@ -128,7 +128,7 @@ export const AuthModal: React.FC = () => {
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-black tracking-tight text-white">SkillStake P2P</h2>
+              <h2 className="text-lg font-black tracking-tight text-white">Tete Arena</h2>
               <p className="text-xs text-slate-400">Telegram & Web P2P Skill Gaming</p>
             </div>
           </div>
@@ -170,7 +170,7 @@ export const AuthModal: React.FC = () => {
                   handleTelegramAuth({
                     id: 9918231,
                     username: 'demo_player',
-                    first_name: 'SkillStake Player',
+                    first_name: 'Tete Arena Player',
                   })
                 }
                 className="text-[11px] font-mono font-bold bg-slate-800 hover:bg-slate-700 text-sky-300 px-2.5 py-1 rounded-lg border border-sky-500/20 transition-colors cursor-pointer"
@@ -416,7 +416,7 @@ export const AuthModal: React.FC = () => {
         )}
 
         <p className="text-[10px] text-slate-500 text-center">
-          By signing in, you agree to SkillStake Escrow Terms and confirm you are 18+ years of age.
+          By signing in, you agree to Tete Arena Terms and confirm you are 18+ years of age.
         </p>
       </div>
     </div>

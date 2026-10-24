@@ -49,7 +49,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onOpenAdmi
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-lg sm:text-xl font-black tracking-tight text-white">SkillStake</span>
+              <span className="text-lg sm:text-xl font-black tracking-tight text-white">Tete Arena</span>
               <span className="hidden sm:inline text-[10px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
                 P2P Arena
               </span>
@@ -360,7 +360,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onOpenAdmi
               How Your Money is Protected
             </h2>
             <p className="text-xs sm:text-sm text-slate-400 mt-2">
-              Every match is backed by automated smart escrow. Neither player nor SkillStake can alter the outcome.
+              Every match is backed by automated smart escrow. Neither player nor Tete Arena can alter the outcome.
             </p>
           </div>
 
@@ -483,10 +483,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onOpenAdmi
             <div className="bg-slate-900/70 border border-white/10 rounded-2xl p-4 sm:p-5">
               <h4 className="text-sm font-bold text-white flex items-center gap-2">
                 <HelpCircle className="w-4 h-4 text-amber-400 shrink-0" />
-                Is SkillStake legal in Nigeria?
+                Is Tete Arena legal in Nigeria?
               </h4>
               <p className="text-xs text-slate-300 mt-2 leading-relaxed pl-6">
-                Yes. SkillStake operates strictly as a skill-based P2P competition platform where the outcome of games
+                Yes. Tete Arena operates strictly as a skill-based P2P competition platform where the outcome of games
                 like Whot, Ludo, and Draughts depends on mental strategy and player dexterity, not chance.
               </p>
             </div>
@@ -562,7 +562,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onOpenAdmi
             <div className="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
               <ShieldCheck className="w-3.5 h-3.5" />
             </div>
-            <span className="font-bold text-white text-sm">SkillStake Nigeria</span>
+            <span className="font-bold text-white text-sm">Tete Arena</span>
           </div>
 
           <div className="flex items-center gap-6 text-[11px] text-slate-400 flex-wrap justify-center">
@@ -584,7 +584,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onOpenAdmi
           </div>
 
           <p className="text-[11px]">
-            © 2026 SkillStake P2P Gaming Ltd. All rights reserved.
+            © 2026 Tete Arena. All rights reserved.
           </p>
         </div>
       </footer>

@@ -51,7 +51,7 @@ export const WinnerShareCard: React.FC<WinnerShareCardProps> = ({ playerName, op
     ctx.fillStyle = '#fbbf24';
     ctx.font = '800 24px Outfit, sans-serif';
     ctx.letterSpacing = '5px';
-    ctx.fillText('SKILLSTAKE  /  MATCH WON', 78, 96);
+    ctx.fillText('TETE ARENA  /  MATCH WON', 78, 96);
 
     ctx.fillStyle = '#ffffff';
     ctx.font = '800 50px Outfit, sans-serif';
@@ -96,7 +96,7 @@ export const WinnerShareCard: React.FC<WinnerShareCardProps> = ({ playerName, op
     const binary = atob(dataUrl.split(',')[1]);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-    const fileName = `skillstake-${displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-win.png`;
+    const fileName = `tete-arena-${displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-win.png`;
     return new File([bytes], fileName, { type: 'image/png' });
   };
 
@@ -125,7 +125,7 @@ export const WinnerShareCard: React.FC<WinnerShareCardProps> = ({ playerName, op
     try {
       const file = getCardFile();
       if (file && navigator.share && navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'SkillStake Match Victory', text: `${shareCaption}\n\n⚔️ Challenge Me Now: ${roomLink}` });
+        await navigator.share({ files: [file], title: 'Tete Arena Match Victory', text: `${shareCaption}\n\n⚔️ Challenge Me Now: ${roomLink}` });
         return;
       }
       telegram.shareWinnerCard(shareCaption, roomLink);

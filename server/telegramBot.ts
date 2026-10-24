@@ -197,8 +197,8 @@ class TelegramBotListenerService {
     }
 
     const messageText = roomCode
-      ? '🎮 Your SkillStake match is ready. Tap below to open it.'
-      : 'Welcome to SkillStake! Open a match invite to join a game.';
+      ? '🎮 Your Tete Arena match is ready. Tap below to open it.'
+      : 'Welcome to Tete Arena! Open a match invite to join a game.';
     const body: any = { chat_id: chatId, text: messageText };
     if (openUrl) {
       body.reply_markup = {

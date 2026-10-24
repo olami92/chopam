@@ -490,7 +490,7 @@ app.get('/api/escrow/verify/:reference', (req, res) => {
           status: 'SETTLED',
         },
     message: isFiat
-      ? 'Verified via SkillStake Cryptographic Audit Ledger & NIP Bank Session Proof. Matched with NIBSS settlement gateway.'
+      ? 'Verified via Tete Arena Cryptographic Audit Ledger & NIP Bank Session Proof. Matched with NIBSS settlement gateway.'
       : 'Verified on-chain via Polygon PoS Smart Contract Escrow.',
   };
 
@@ -1395,7 +1395,7 @@ app.post('/api/feedback', (req, res) => {
 
   return res.json({
     success: true,
-    message: 'Feedback submitted successfully. Thank you for helping build SkillStake!',
+    message: 'Feedback submitted successfully. Thank you for helping build Tete Arena!',
     feedback: newFeedback,
   });
 });
@@ -1967,7 +1967,7 @@ app.post('/api/escrow/sync-user', async (req, res) => {
 let platformBankDetails = {
   bankName: process.env.PLATFORM_BANK_NAME || 'OPAY / Kuda Bank',
   accountNumber: process.env.PLATFORM_ACCOUNT_NUMBER || '903 847 2910',
-  accountName: process.env.PLATFORM_ACCOUNT_NAME || 'SkillStake Escrow Gaming Ltd',
+  accountName: process.env.PLATFORM_ACCOUNT_NAME || 'Tete Arena',
 };
 
 // Initialize platform settings from database on server startup

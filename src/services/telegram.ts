@@ -181,7 +181,7 @@ export class TelegramService {
     const botUsername = 'SkillStakeBot';
     const deepLink = this.getMatchDeepLink(roomId);
     const text = encodeURIComponent(
-      `Join my private staking table on SkillStake!\n🎮 Game: ${gameModeName}\n💰 Stake: ₦${stake.toLocaleString()}\nRoom Code: ${roomId}`
+      `Join my private staking table on Tete Arena!\n🎮 Game: ${gameModeName}\n💰 Stake: ₦${stake.toLocaleString()}\nRoom Code: ${roomId}`
     );
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(deepLink)}&text=${text}`;
 

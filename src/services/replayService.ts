@@ -16,7 +16,7 @@ const REPLAY_M7712_WHOT: MatchReplayData = {
   player1: {
     id: 'usr_me',
     username: 'NaijaChamp_Ola',
-    displayName: 'SkillStake Player',
+    displayName: 'Tete Arena Player',
     avatarUrl: getDynamicAvatarUrl('NaijaChamp_Ola'),
   },
   player2: {
@@ -269,7 +269,7 @@ const REPLAY_M7712_WHOT: MatchReplayData = {
       actorName: 'Smart Escrow Oracle',
       actorAvatar: 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=150',
       actionTitle: 'Polygon Escrow Settled • ₦4,750 Disbursed',
-      actionDescription: 'Oracle verified final card state on Polygon. ₦4,750 (95% net pot) released to SkillStake Player vault.',
+      actionDescription: 'Oracle verified final card state on Polygon. ₦4,750 (95% net pot) released to Tete Arena Player vault.',
       timestampOffset: '3:42',
       isKeyMoment: true,
       whotState: {
@@ -295,7 +295,7 @@ const REPLAY_M7709_LUDO_BLITZ: MatchReplayData = {
   player1: {
     id: 'usr_me',
     username: 'NaijaChamp_Ola',
-    displayName: 'SkillStake Player',
+    displayName: 'Tete Arena Player',
     avatarUrl: getDynamicAvatarUrl('NaijaChamp_Ola'),
   },
   player2: {
@@ -556,7 +556,7 @@ const REPLAY_M7702_DRAUGHTS: MatchReplayData = {
   player1: {
     id: 'usr_me',
     username: 'NaijaChamp_Ola',
-    displayName: 'SkillStake Player',
+    displayName: 'Tete Arena Player',
     avatarUrl: getDynamicAvatarUrl('NaijaChamp_Ola'),
   },
   player2: {
@@ -569,7 +569,7 @@ const REPLAY_M7702_DRAUGHTS: MatchReplayData = {
   duration: '5m 10s',
   timestamp: '3h ago',
   txHash: '0x19bb2c55e920d3f821ac33b47e22',
-  finalReason: 'Nkechi Eze ran out of valid moves. SkillStake Player achieved King domination.',
+  finalReason: 'Nkechi Eze ran out of valid moves. Tete Arena Player achieved King domination.',
   steps: [
     {
       stepIndex: 1,
@@ -769,7 +769,7 @@ const REPLAY_M7702_DRAUGHTS: MatchReplayData = {
       actorName: 'Smart Escrow Oracle',
       actorAvatar: 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=150',
       actionTitle: 'Smart Escrow Settled • ₦2,850 Disbursed',
-      actionDescription: 'Oracle verified 3-0 piece elimination. ₦2,850 (95% pot) released to SkillStake Player vault.',
+      actionDescription: 'Oracle verified 3-0 piece elimination. ₦2,850 (95% pot) released to Tete Arena Player vault.',
       timestampOffset: '5:10',
       isKeyMoment: true,
       draughtsState: {
@@ -797,7 +797,7 @@ const REPLAY_M7695_LUDO_CLASSIC: MatchReplayData = {
   player1: {
     id: 'usr_me',
     username: 'NaijaChamp_Ola',
-    displayName: 'SkillStake Player',
+    displayName: 'Tete Arena Player',
     avatarUrl: getDynamicAvatarUrl('NaijaChamp_Ola'),
   },
   player2: {
@@ -810,7 +810,7 @@ const REPLAY_M7695_LUDO_CLASSIC: MatchReplayData = {
   duration: '6m 20s',
   timestamp: 'Yesterday',
   txHash: '0x7e8891ac3b2184ff930b127e89ab',
-  finalReason: 'SkillStake Player safely brought all 4 Red Tokens into Home Sanctuary to win ₦5,700.',
+  finalReason: 'Tete Arena Player safely brought all 4 Red Tokens into Home Sanctuary to win ₦5,700.',
   steps: [
     {
       stepIndex: 1,
@@ -1049,7 +1049,7 @@ const REPLAY_M7695_LUDO_CLASSIC: MatchReplayData = {
       actorName: 'Smart Escrow Oracle',
       actorAvatar: 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=150',
       actionTitle: 'Smart Escrow Settled • ₦5,700 Disbursed',
-      actionDescription: 'Oracle verified 4-token home sanctuary clear. ₦5,700 (95% pot) released to SkillStake Player vault.',
+      actionDescription: 'Oracle verified 4-token home sanctuary clear. ₦5,700 (95% pot) released to Tete Arena Player vault.',
       timestampOffset: '6:20',
       isKeyMoment: true,
       ludoState: {
@@ -1082,7 +1082,7 @@ const REPLAY_M9945_BEAD16: MatchReplayData = {
   player1: {
     id: 'usr_me',
     username: 'NaijaChamp_Ola',
-    displayName: 'SkillStake Player',
+    displayName: 'Tete Arena Player',
     avatarUrl: getDynamicAvatarUrl('NaijaChamp_Ola'),
   },
   player2: {
@@ -1122,7 +1122,7 @@ const REPLAY_M9945_BEAD16: MatchReplayData = {
       actorName: 'Smart Escrow Oracle',
       actorAvatar: 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=150',
       actionTitle: 'Smart Escrow Settled • ₦9,500 Disbursed',
-      actionDescription: 'Oracle verified 16-bead elimination win. ₦9,500 (95% pot) released to SkillStake Player vault.',
+      actionDescription: 'Oracle verified 16-bead elimination win. ₦9,500 (95% pot) released to Tete Arena Player vault.',
       timestampOffset: '4:15',
       isKeyMoment: true,
     },
