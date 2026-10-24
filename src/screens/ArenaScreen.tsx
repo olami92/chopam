@@ -36,6 +36,7 @@ export const ArenaScreen: React.FC = () => {
     user,
     escrowHistory,
     startMatch,
+    startCoinAiMatch,
     weeklyPerformance,
     gameSkillMatrix,
   } = useGame();
@@ -606,6 +607,31 @@ export const ArenaScreen: React.FC = () => {
                       </motion.button>
                     ))}
                   </div>
+
+                  {game.id === 'bead16' && (
+                    <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-2">
+                      <div className="mb-1.5 flex items-center justify-between text-[10px] font-semibold text-cyan-200">
+                        <span>Play Odogwuking for Tete Coins</span>
+                        <span>Balance: {user.coinBalance || 0}</span>
+                      </div>
+                      <div className="flex gap-1.5">
+                        {[100, 250, 500].map((coinStake) => (
+                          <motion.button
+                            key={coinStake}
+                            whileTap={{ scale: 0.94 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void startCoinAiMatch(coinStake);
+                            }}
+                            disabled={(user.coinBalance || 0) < coinStake}
+                            className="flex-1 rounded-lg border border-cyan-300/20 bg-cyan-950/70 py-1.5 text-[10px] font-bold text-cyan-200 transition-colors hover:bg-cyan-800/70 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            ◉ {coinStake}
+                          </motion.button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <motion.button
                     whileHover={{ scale: 1.03 }}

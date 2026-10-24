@@ -25,6 +25,7 @@ import { getDynamicAvatarUrl, ensureDynamicAvatarUrl } from '../utils/avatar';
 const STORAGE_KEY_USER = 'skillstake_user_v1';
 const STORAGE_KEY_ESCROW = 'skillstake_escrow_v1';
 const STORAGE_KEY_AUTH = 'skillstake_auth_v1';
+const STORAGE_KEY_SESSION = 'skillstake_session_v1';
 const STORAGE_KEY_NOTIFICATIONS = 'skillstake_notifications_v1';
 const STORAGE_KEY_WALLET_TX = 'skillstake_wallet_tx_v1';
 const STORAGE_KEY_WEEKLY = 'skillstake_weekly_v1';
@@ -368,6 +369,9 @@ interface GameContextType {
     initialStatus?: MatchStatus,
     turnMode?: TurnMode
   ) => boolean;
+  startCoinAiMatch: (stake: number) => Promise<boolean>;
+  updateTeteCoinBalance: (balance: number) => void;
+  completeCoinAiMatch: (winner: 'player' | 'opponent') => void;
   settleMatch: (winner: 'player' | 'opponent' | 'draw') => string;
   cancelMatch: () => void;
   forfeitMatch: () => void;
@@ -487,6 +491,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return INITIAL_MOCK_USER;
   });
+  const coinMatchStarting = useRef(false);
 
   const [weeklyPerformance, setWeeklyPerformance] = useState<DayPerformance[]>(() => {
     try {
@@ -963,6 +968,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!res.ok || !data.success) {
         return { success: false, error: data.error || 'Invalid username/email or password.' };
       }
+      if (data.sessionToken) localStorage.setItem(STORAGE_KEY_SESSION, data.sessionToken);
 
       // Restore saved per-user stats, win rate, weekly performance & escrow history
       const savedUserRaw =
@@ -997,6 +1003,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         phone: data.user.phone || restoredUser?.phone || '',
         availableBalance: data.user.availableBalance !== undefined ? data.user.availableBalance : (restoredUser?.availableBalance || 0),
         escrowBalance: data.user.escrowBalance !== undefined ? data.user.escrowBalance : (restoredUser?.escrowBalance || 0),
+        coinBalance: data.user.coinBalance ?? restoredUser?.coinBalance ?? 0,
         tier: restoredUser?.tier || 'Unranked',
         rank: restoredUser?.rank || 0,
         gameStats: restoredGameStats,
@@ -1051,6 +1058,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!res.ok || !resData.success) {
           return { success: false, error: resData.error || 'Registration failed' };
         }
+        if (resData.sessionToken) localStorage.setItem(STORAGE_KEY_SESSION, resData.sessionToken);
 
         const newUser: UserProfile = {
           ...EMPTY_USER_PROFILE,
@@ -1111,6 +1119,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!res.ok || !data.success) {
           return { success: false, error: data.error || 'Telegram authentication failed.' };
         }
+        if (data.sessionToken) localStorage.setItem(STORAGE_KEY_SESSION, data.sessionToken);
+        else localStorage.removeItem(STORAGE_KEY_SESSION);
 
         const cleanIdentifier = data.user.username;
         const savedUserRaw =
@@ -1217,6 +1227,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       gameStats: EMPTY_GAME_STATS,
     };
 
+    localStorage.removeItem(STORAGE_KEY_SESSION);
     setUser(DEMO_USER);
     setEscrowHistory(INITIAL_ESCROW_HISTORY);
     setNotifications(INITIAL_NOTIFICATIONS);
@@ -1240,7 +1251,18 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem(getWeeklyStorageKey(user.id), JSON.stringify(weeklyPerformance));
         localStorage.setItem(getEscrowStorageKey(user.id), JSON.stringify(escrowHistory));
       }
+      if (activeMatch?.coinMatchId) {
+        const session = localStorage.getItem(STORAGE_KEY_SESSION);
+        if (session) {
+          void fetch(`/api/coins/ai-matches/${encodeURIComponent(activeMatch.coinMatchId)}/forfeit`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${session}`, 'Content-Type': 'application/json' },
+            body: '{}',
+          }).catch(() => undefined);
+        }
+      }
       localStorage.removeItem(STORAGE_KEY_AUTH);
+      localStorage.removeItem(STORAGE_KEY_SESSION);
     } catch {
       // ignore
     }
@@ -1249,8 +1271,49 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setActiveMatch(null);
     telegram.triggerHaptic('selection');
     sound.playClick();
-  }, [user, weeklyPerformance, escrowHistory]);
+  }, [user, weeklyPerformance, escrowHistory, activeMatch]);
 
+
+  const updateTeteCoinBalance = useCallback((balance: number) => {
+    if (!Number.isFinite(balance)) return;
+    setUser((prev) => ({ ...prev, coinBalance: balance }));
+  }, []);
+
+  const completeCoinAiMatch = useCallback((winner: 'player' | 'opponent') => {
+    setActiveMatch((prev) => prev?.coinMatchId
+      ? { ...prev, status: 'completed', settledResult: winner, settledAt: new Date().toLocaleTimeString() }
+      : prev);
+  }, []);
+
+  const startCoinAiMatch = useCallback(async (stake: number): Promise<boolean> => {
+    if (coinMatchStarting.current) return false;
+    if (!localStorage.getItem(STORAGE_KEY_SESSION)) {
+      addNotification({ title: 'Sign in required', message: 'Sign in with a verified account to play for Tete Coins.', type: 'system' });
+      return false;
+    }
+    coinMatchStarting.current = true;
+    try {
+      const { startTeteCoinBead16Match } = await import('../services/teteCoinMatchService');
+      const { match, activeMatch: newMatch } = await startTeteCoinBead16Match(
+        stake,
+        user.coinBalance,
+        user.username,
+        isAuthenticated,
+        Boolean(activeMatch?.coinMatchId && activeMatch.status !== 'completed')
+      );
+      updateTeteCoinBalance(match.balance);
+      clearReplaySteps();
+      setActiveMatch(newMatch);
+      telegram.triggerHaptic('medium');
+      sound.playClick();
+      return true;
+    } catch (error: any) {
+      addNotification({ title: 'Could not start match', message: error?.message || 'The server could not lock your Tete Coins.', type: 'system' });
+      return false;
+    } finally {
+      coinMatchStarting.current = false;
+    }
+  }, [isAuthenticated, activeMatch?.coinMatchId, activeMatch?.status, user.coinBalance, user.username, addNotification, updateTeteCoinBalance, clearReplaySteps]);
 
   const startMatch = useCallback(
     (
@@ -1309,13 +1372,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ? 'Waiting for Opponent...'
           : isPrivate
           ? 'Challenger'
-          : 'Odogwu_King',
+          : 'odogwuking',
         displayName: isWaitingForOpponent
           ? 'Waiting for Challenger'
           : isPrivate
           ? 'Private Challenger'
-          : 'Femi Davies',
-        avatarUrl: getDynamicAvatarUrl('Odogwu_King'),
+          : 'Odogwuking',
+        avatarUrl: getDynamicAvatarUrl('odogwuking'),
         winRate: 67.2,
       };
 
@@ -1919,6 +1982,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const forfeitMatch = useCallback(() => {
     if (activeMatch && activeMatch.status !== 'completed') {
+      if (activeMatch.coinMatchId) {
+        import('../services/teteCoinMatchService').then(({ TeteCoinMatchService }) => TeteCoinMatchService.forfeit(activeMatch.coinMatchId!)).then((result) => {
+          updateTeteCoinBalance(result.balance);
+          const outcome = result.winner === 'p2' ? 'player' : 'opponent';
+          setActiveMatch((prev) => prev ? { ...prev, status: 'completed', settledResult: outcome, settledAt: new Date().toLocaleTimeString() } : null);
+          addNotification({ title: 'Match Forfeited', message: `You forfeited the Bead 16 match and lost ${activeMatch.stake} Tete Coins.`, type: 'match' });
+        }).catch((error) => addNotification({ title: 'Could not forfeit match', message: error?.message || 'Try again when your connection is restored.', type: 'system' }));
+        return;
+      }
       const oppUsername = activeMatch.opponent.username;
       const stakeAmt = activeMatch.stake;
       settleMatch('opponent');
@@ -1930,7 +2002,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } else {
       setActiveMatch(null);
     }
-  }, [activeMatch, settleMatch, addNotification]);
+  }, [activeMatch, settleMatch, addNotification, updateTeteCoinBalance]);
 
   const cancelMatch = useCallback(() => {
     if (activeMatch && activeMatch.status === 'waiting_for_opponent') {
@@ -2302,7 +2374,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       (activeOpponentUsername && (
         activeOpponentUsername.includes('Challenger') ||
         activeOpponentUsername.includes('Waiting') ||
-        activeOpponentUsername === 'Odogwu_King'
+        ['Odogwu_King', 'odogwuking'].includes(activeOpponentUsername)
       ));
 
     if (!isWaiting) return;
@@ -2581,6 +2653,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         escrowHistory,
         walletTransactions,
         startMatch,
+        startCoinAiMatch,
+        updateTeteCoinBalance,
+        completeCoinAiMatch,
         settleMatch,
         cancelMatch,
         forfeitMatch,

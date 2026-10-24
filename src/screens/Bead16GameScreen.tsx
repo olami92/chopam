@@ -26,9 +26,11 @@ import { EscrowBanner } from '../components/EscrowBanner';
 import { MatchEndModal } from '../components/MatchEndModal';
 import { TurnTimerBar } from '../components/TurnTimerBar';
 import { GameRulesModal } from '../components/GameRulesModal';
+import { TeteCoinMatchService } from '../services/teteCoinMatchService';
 
 export const Bead16GameScreen: React.FC = () => {
-  const { activeMatch, user, settleMatch, startMatch, cancelMatch, sendP2pStateUpdate } = useGame();
+  const { activeMatch, user, settleMatch, startMatch, startCoinAiMatch, updateTeteCoinBalance, completeCoinAiMatch, cancelMatch, sendP2pStateUpdate } = useGame();
+  const isCoinMatch = Boolean(activeMatch?.coinMatchId);
 
   const [board, setBoard] = useState<BeadPiece[]>(() => createInitialBead16Board());
   const [turn, setTurn] = useState<BeadPlayer>('p2'); // p2: Blue (User starts at bottom)
@@ -39,6 +41,36 @@ export const Bead16GameScreen: React.FC = () => {
   const [lastMoveTrail, setLastMoveTrail] = useState<{ from: number; to: number } | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showRulesModal, setShowRulesModal] = useState(false);
+  const [isTimeoutPending, setIsTimeoutPending] = useState(false);
+  const [serverTurnDeadlineAt, setServerTurnDeadlineAt] = useState<number | null>(null);
+  const [serverSequence, setServerSequence] = useState(0);
+
+  useEffect(() => {
+    if (!activeMatch?.coinMatchId) return;
+    let cancelled = false;
+    setIsAiThinking(true);
+    TeteCoinMatchService.load(activeMatch.coinMatchId).then((match) => {
+      if (cancelled) return;
+      setBoard(match.state.board);
+      setTurn(match.state.turn);
+      setMustContinueJumpNode(match.state.mustContinueJumpNode);
+      setLastMoveTrail(match.state.lastMoveTrail);
+      setServerSequence(match.state.sequence);
+      setServerTurnDeadlineAt(match.state.turnDeadlineAt);
+      setTurnTimeLeft(Math.max(0, Math.ceil((match.state.turnDeadlineAt - Date.now()) / 1000)));
+      updateTeteCoinBalance(match.balance);
+      if (match.status === 'SETTLED' && match.winner) {
+        const outcome = match.winner === 'p2' ? 'player' : 'opponent';
+        setMatchResult(outcome);
+        completeCoinAiMatch(outcome);
+      }
+    }).catch((error) => {
+      if (!cancelled) console.warn('Could not restore authoritative Tete Coin match:', error);
+    }).finally(() => {
+      if (!cancelled) setIsAiThinking(false);
+    });
+    return () => { cancelled = true; };
+  }, [activeMatch?.coinMatchId, updateTeteCoinBalance, completeCoinAiMatch]);
 
   // Is local user the Host of this table?
   const isHost = useMemo(() => {
@@ -69,8 +101,9 @@ export const Bead16GameScreen: React.FC = () => {
 
   // Reset turn countdown timer whenever turn or multi-jump state updates
   useEffect(() => {
-    setTurnTimeLeft(!isBotMatch && activeMatch?.turnDeadlineAt ? Math.max(0, Math.ceil((activeMatch.turnDeadlineAt - Date.now()) / 1000)) : maxTurnTime);
-  }, [turn, mustContinueJumpNode, maxTurnTime, isBotMatch, activeMatch?.turnDeadlineAt]);
+    const deadline = isCoinMatch ? (serverTurnDeadlineAt || activeMatch?.turnDeadlineAt) : (!isBotMatch ? activeMatch?.turnDeadlineAt : undefined);
+    setTurnTimeLeft(deadline ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) : maxTurnTime);
+  }, [turn, mustContinueJumpNode, maxTurnTime, isBotMatch, isCoinMatch, serverTurnDeadlineAt, activeMatch?.turnDeadlineAt]);
 
   // Decrement turn timer every 1s
   useEffect(() => {
@@ -93,9 +126,10 @@ export const Bead16GameScreen: React.FC = () => {
     return () => clearInterval(timer);
   }, [turn, isMyTurn, matchResult, soundEnabled]);
 
-  // Handle turn timeout expiry when player runs out of 15 seconds
+  // Local P2P timeouts switch turns. Coin matches ask the server to settle only
+  // after its persisted deadline has elapsed.
   useEffect(() => {
-    if (matchResult || turnTimeLeft > 0) return;
+    if (matchResult || turnTimeLeft > 0 || isCoinMatch) return;
 
     sound.playTimeout();
     telegram.triggerHaptic('warning');
@@ -115,7 +149,7 @@ export const Bead16GameScreen: React.FC = () => {
         winner: null,
       });
     }
-  }, [turnTimeLeft, matchResult, turn, board, lastMoveTrail, isBotMatch, sendP2pStateUpdate]);
+  }, [turnTimeLeft, matchResult, turn, board, lastMoveTrail, isBotMatch, sendP2pStateUpdate, isCoinMatch]);
 
   // Player 1 (Red / Top) Card Info
   const p1Name = isBotMatch
@@ -188,7 +222,7 @@ export const Bead16GameScreen: React.FC = () => {
 
   // Handle player selecting a node
   const handleNodeClick = (nodeId: number) => {
-    if (matchResult || isAiThinking) return;
+    if (matchResult || isAiThinking || isTimeoutPending) return;
 
     // Only allow input on local user's turn
     if (!isMyTurn) return;
@@ -226,15 +260,68 @@ export const Bead16GameScreen: React.FC = () => {
       }
 
       // Auto-settle escrow pot
-      if (activeMatch && activeMatch.status !== 'completed') {
+      if (activeMatch && activeMatch.status !== 'completed' && !activeMatch.coinMatchId) {
         settleMatch(outcome);
+      } else if (activeMatch?.coinMatchId) {
+        completeCoinAiMatch(outcome);
       }
     },
-    [myRole, soundEnabled, activeMatch, settleMatch]
+    [myRole, soundEnabled, activeMatch, settleMatch, completeCoinAiMatch]
   );
+
+  useEffect(() => {
+    if (!isCoinMatch || !activeMatch?.coinMatchId || matchResult || turnTimeLeft > 0 || isTimeoutPending) return;
+    setIsTimeoutPending(true);
+    sound.playTimeout();
+    TeteCoinMatchService.timeout(activeMatch.coinMatchId).then((response) => {
+      setBoard(response.state.board);
+      setTurn(response.state.turn);
+      updateTeteCoinBalance(response.balance);
+      if (response.status === 'SETTLED' && response.winner) handleMatchEnd(response.winner);
+    }).catch((error: any) => {
+      if (Number.isFinite(error?.remainingSeconds)) setTurnTimeLeft(error.remainingSeconds);
+      else setTurnTimeLeft(5);
+    }).finally(() => setIsTimeoutPending(false));
+  }, [isCoinMatch, activeMatch?.coinMatchId, matchResult, turnTimeLeft, isTimeoutPending, handleMatchEnd, updateTeteCoinBalance]);
 
   // Execute a move on the board
   const executeMove = (move: Move) => {
+    if (activeMatch?.coinMatchId) {
+      setIsAiThinking(true);
+      TeteCoinMatchService.move(activeMatch.coinMatchId, move.from, move.to, serverSequence).then((response) => {
+        setBoard(response.state.board);
+        setTurn(response.state.turn);
+        setMustContinueJumpNode(response.state.mustContinueJumpNode);
+        setLastMoveTrail(response.state.lastMoveTrail);
+        setServerSequence(response.state.sequence);
+        setSelectedNode(null);
+        setServerTurnDeadlineAt(response.state.turnDeadlineAt);
+        setTurnTimeLeft(Math.max(0, Math.ceil((response.state.turnDeadlineAt - Date.now()) / 1000)));
+        updateTeteCoinBalance(response.balance);
+        if (response.status === 'SETTLED' && response.winner) {
+          handleMatchEnd(response.winner);
+        } else if (soundEnabled) {
+          sound.playMove();
+        }
+      }).catch((error) => {
+        console.warn('Tete Coin move rejected by match server:', error);
+        if (error?.status === 409) {
+          TeteCoinMatchService.load(activeMatch.coinMatchId).then((latest) => {
+            setBoard(latest.state.board);
+            setTurn(latest.state.turn);
+            setMustContinueJumpNode(latest.state.mustContinueJumpNode);
+            setLastMoveTrail(latest.state.lastMoveTrail);
+            setServerSequence(latest.state.sequence);
+            setServerTurnDeadlineAt(latest.state.turnDeadlineAt);
+            setTurnTimeLeft(Math.max(0, Math.ceil((latest.state.turnDeadlineAt - Date.now()) / 1000)));
+            updateTeteCoinBalance(latest.balance);
+            if (latest.status === 'SETTLED' && latest.winner) handleMatchEnd(latest.winner);
+          }).catch((loadError) => console.warn('Could not reload authoritative match state:', loadError));
+        }
+      }).finally(() => setIsAiThinking(false));
+      return;
+    }
+
     const nextBoard = applyBead16Move(board, move);
     setBoard(nextBoard);
     setLastMoveTrail({ from: move.from, to: move.to });
@@ -337,7 +424,7 @@ export const Bead16GameScreen: React.FC = () => {
 
   // Trigger AI Bot Turn ONLY if playing against an AI bot
   useEffect(() => {
-    if (isBotMatch && turn === 'p1' && !matchResult && !isAiThinking) {
+    if (isBotMatch && !isCoinMatch && turn === 'p1' && !matchResult && !isAiThinking) {
       setIsAiThinking(true);
       const timer = setTimeout(() => {
         const aiMove = getBestBead16AIMove(board, 'p1');
@@ -352,7 +439,7 @@ export const Bead16GameScreen: React.FC = () => {
 
       return () => clearTimeout(timer);
     }
-  }, [turn, board, matchResult, isAiThinking, isBotMatch]);
+  }, [turn, board, matchResult, isAiThinking, isBotMatch, isCoinMatch]);
 
   const handleRematch = () => {
     const initialBoard = createInitialBead16Board();
@@ -373,7 +460,9 @@ export const Bead16GameScreen: React.FC = () => {
       });
     }
 
-    if (activeMatch) {
+    if (activeMatch?.coinMatchId) {
+      void startCoinAiMatch(activeMatch.stake);
+    } else if (activeMatch) {
       startMatch(activeMatch.gameMode, activeMatch.stake, activeMatch.isPrivate, activeMatch.roomCode);
     }
   };

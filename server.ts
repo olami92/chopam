@@ -11,6 +11,7 @@ import { escrowEngine } from './server/escrowEngine';
 import { pool } from './src/db/index';
 import { telegramBotListener, TelegramWithdrawalData, TelegramFiatDepositData } from './server/telegramBot';
 import { liveChatService } from './server/liveChat';
+import { applyBead16Move, checkBead16Winner, createInitialBead16Board, getBestBead16AIMove, getLegalBead16Moves, BeadPiece, BeadPlayer, Move } from './src/utils/bead16Engine';
 
 const USERS_FILE_PATH = path.join(process.cwd(), 'users_data.json');
 
@@ -232,6 +233,12 @@ async function ensurePlatformSettingsTable() {
         );
       `);
 
+      if (!process.env.AUTH_SESSION_SECRET) {
+        await client.query(`INSERT INTO platform_settings (key, value) VALUES ('auth_session_secret', $1) ON CONFLICT (key) DO NOTHING`, [SESSION_SECRET]);
+        const savedSecret = await client.query(`SELECT value FROM platform_settings WHERE key = 'auth_session_secret'`);
+        if (savedSecret.rows[0]?.value) SESSION_SECRET = String(savedSecret.rows[0].value);
+      }
+
       await client.query(`
         CREATE TABLE IF NOT EXISTS users (
           id VARCHAR(100) PRIMARY KEY,
@@ -270,6 +277,22 @@ async function ensurePlatformSettingsTable() {
           created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
         CREATE INDEX IF NOT EXISTS idx_platform_coin_ledger_user ON platform_coin_ledger (user_id, created_at DESC);
+        CREATE TABLE IF NOT EXISTS platform_coin_ai_matches (
+          id VARCHAR(80) PRIMARY KEY,
+          user_id VARCHAR(100) NOT NULL,
+          game_mode VARCHAR(30) NOT NULL,
+          stake BIGINT NOT NULL CHECK (stake > 0),
+          client_request_id VARCHAR(80),
+          state JSONB NOT NULL,
+          status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+          winner VARCHAR(10),
+          created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          settled_at TIMESTAMPTZ
+        );
+        ALTER TABLE platform_coin_ai_matches ADD COLUMN IF NOT EXISTS client_request_id VARCHAR(80);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_platform_coin_ai_matches_request ON platform_coin_ai_matches (user_id, client_request_id) WHERE client_request_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_platform_coin_ai_matches_user ON platform_coin_ai_matches (user_id, updated_at DESC);
       `);
 
       await client.query(`
@@ -524,6 +547,28 @@ const userAuthStore = new Map<string, StoredUserAuth>();
 
 const COINS_PER_GAME_WIN = Math.max(1, Number(process.env.COINS_PER_GAME_WIN) || 5);
 const COINS_PER_REFERRAL_GAME = Math.max(1, Number(process.env.COINS_PER_REFERRAL_GAME) || 10);
+const WELCOME_TETE_COINS = 5000;
+let SESSION_SECRET = process.env.AUTH_SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+let platformInitialization: Promise<void> = Promise.resolve();
+const createSessionToken = (userId: string) => {
+  const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+  const payload = Buffer.from(JSON.stringify({ sub: userId, exp: expiresAt })).toString('base64url');
+  const signature = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url');
+  return `${payload}.${signature}`;
+};
+function getSessionUserId(req: express.Request): string | null {
+  const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const [payload, signature] = token.split('.');
+  if (!payload || !signature) return null;
+  const expected = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest();
+  let actual: Buffer;
+  try { actual = Buffer.from(signature, 'base64url'); } catch { return null; }
+  if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    return typeof data.sub === 'string' && data.exp > Date.now() ? data.sub : null;
+  } catch { return null; }
+}
 const createReferralCode = () => crypto.randomBytes(7).toString('hex');
 
 async function findReferrerId(client: any, rawCode: unknown, newUserId: string): Promise<string | null> {
@@ -562,6 +607,33 @@ async function creditPlatformCoins(userId: string, amount: number, reason: strin
   }
 }
 
+async function creditPlatformCoinsInTransaction(client: any, userId: string, amount: number, reason: string, idempotencyKey: string, metadata: Record<string, unknown> = {}) {
+  const inserted = await client.query(
+    `INSERT INTO platform_coin_ledger (user_id, amount, reason, idempotency_key, metadata)
+     VALUES ($1, $2, $3, $4, $5::jsonb) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id`,
+    [userId, amount, reason, idempotencyKey, JSON.stringify(metadata)]
+  );
+  if (inserted.rowCount) {
+    await client.query(
+      `INSERT INTO platform_coin_accounts (user_id, balance) VALUES ($1, $2)
+       ON CONFLICT (user_id) DO UPDATE SET balance = platform_coin_accounts.balance + EXCLUDED.balance, updated_at = CURRENT_TIMESTAMP`,
+      [userId, amount]
+    );
+  }
+  return Boolean(inserted.rowCount);
+}
+
+async function awardReferralFirstGameInTransaction(client: any, userId: string, matchId: string) {
+  const referral = await client.query('SELECT referred_by_user_id FROM users WHERE id = $1', [userId]);
+  const referrerId = referral.rows[0]?.referred_by_user_id;
+  if (!referrerId) return;
+  await creditPlatformCoinsInTransaction(client, String(referrerId), COINS_PER_REFERRAL_GAME, 'referral_first_game', `referral-first-game:${userId}`, { referredUserId: userId, matchId });
+}
+
+async function ensureWelcomeTeteCoins(userId: string) {
+  return creditPlatformCoins(userId, WELCOME_TETE_COINS, 'welcome_bonus', `welcome-bonus:${userId}`, { source: 'first_platform_login' });
+}
+
 async function awardCoinsForSettledMatch(session: any, isDraw = false) {
   const rewards: Array<{ userId: string; amount: number; reason: string; balance: number }> = [];
   const matchId = String(session.matchId);
@@ -587,6 +659,7 @@ loadPersistentUsersFromFile();
 // User Registration Endpoint
 app.post('/api/auth/register', async (req, res) => {
   try {
+    await platformInitialization;
     const { username, password, displayName, email, phone, referralCode: incomingReferralCode } = req.body;
     const cleanUsername = String(username || '').replace(/^@/, '').trim().toLowerCase();
     const cleanEmail = String(email || '').trim().toLowerCase();
@@ -670,6 +743,12 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     escrowEngine.getOrCreateUser(userId, cleanUsername, 0);
+    let coinBalance = 0;
+    try {
+      coinBalance = (await ensureWelcomeTeteCoins(userId)).balance;
+    } catch (coinError) {
+      console.warn('[Tete Coin Welcome Bonus] Could not award new player bonus:', coinError);
+    }
 
     const token = 'usr_token_' + Buffer.from(`${userId}:${Date.now()}`).toString('base64');
     console.log(`[Auth] Registered new user @${cleanUsername} (ID: ${userId})`);
@@ -677,6 +756,7 @@ app.post('/api/auth/register', async (req, res) => {
     return res.json({
       success: true,
       token,
+      sessionToken: createSessionToken(userId),
       user: {
         id: userId,
         username: cleanUsername,
@@ -685,7 +765,7 @@ app.post('/api/auth/register', async (req, res) => {
         phone: phone || '',
         availableBalance: 0,
         escrowBalance: 0,
-        coinBalance: 0,
+        coinBalance,
         referralCode,
       },
     });
@@ -697,6 +777,7 @@ app.post('/api/auth/register', async (req, res) => {
 // User Sign In / Login Endpoint
 app.post('/api/auth/login', async (req, res) => {
   try {
+    await platformInitialization;
     const { username, password } = req.body;
     const cleanIdentifier = String(username || '').replace(/^@/, '').trim().toLowerCase();
     const rawPassword = String(password || '').trim();
@@ -765,12 +846,19 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const engineUser = escrowEngine.getOrCreateUser(record.id, record.username);
+    let coinBalance = 0;
+    try {
+      coinBalance = (await ensureWelcomeTeteCoins(record.id)).balance;
+    } catch (coinError) {
+      console.warn('[Tete Coin Welcome Bonus] Could not ensure player bonus:', coinError);
+    }
     const token = 'usr_token_' + Buffer.from(`${record.id}:${Date.now()}`).toString('base64');
     console.log(`[Auth SUCCESS] User @${record.username} signed in successfully.`);
 
     return res.json({
       success: true,
       token,
+      sessionToken: createSessionToken(record.id),
       user: {
         id: record.id,
         username: record.username,
@@ -780,6 +868,7 @@ app.post('/api/auth/login', async (req, res) => {
         avatarUrl: record.avatarUrl || '',
         availableBalance: engineUser ? engineUser.availableBalance : 0,
         escrowBalance: engineUser ? engineUser.escrowLockedBalance : 0,
+        coinBalance,
       },
     });
   } catch (err: any) {
@@ -790,8 +879,10 @@ app.post('/api/auth/login', async (req, res) => {
 // Telegram Mini App User Authentication & Auto-Registration Endpoint (Phase 1)
 app.post('/api/auth/telegram', async (req, res) => {
   try {
+    await platformInitialization;
     const { initData, user: rawUser, startParam } = req.body;
     let tgUser = rawUser;
+    let telegramAuthVerified = false;
 
     // Parse initData if provided
     if (initData) {
@@ -802,7 +893,7 @@ app.post('/api/auth/telegram', async (req, res) => {
           tgUser = JSON.parse(userParam);
         }
 
-        // Optional HMAC validation if TELEGRAM_BOT_TOKEN is set
+        // A signed server session is only issued for verified Telegram initData.
         const botToken = process.env.TELEGRAM_BOT_TOKEN;
         if (botToken && parsedData.has('hash')) {
           const receivedHash = parsedData.get('hash');
@@ -817,9 +908,10 @@ app.post('/api/auth/telegram', async (req, res) => {
           const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
           const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
 
-          if (calculatedHash !== receivedHash) {
-            console.warn('[Telegram Auth Note] Hash check mismatch; proceeding in dev/demo fallback mode');
-          }
+          const received = Buffer.from(receivedHash || '', 'hex');
+          const calculated = Buffer.from(calculatedHash, 'hex');
+          const authDate = Number(parsedData.get('auth_date')) * 1000;
+          telegramAuthVerified = received.length === calculated.length && crypto.timingSafeEqual(received, calculated) && Number.isFinite(authDate) && authDate <= Date.now() + 5 * 60 * 1000 && Date.now() - authDate < 24 * 60 * 60 * 1000;
         }
       } catch (parseErr) {
         console.warn('[Telegram Auth] Error parsing initData:', parseErr);
@@ -940,6 +1032,7 @@ app.post('/api/auth/telegram', async (req, res) => {
     const engineUser = escrowEngine.getOrCreateUser(existingRecord.id, existingRecord.username);
     let coinBalance = 0;
     try {
+      coinBalance = (await ensureWelcomeTeteCoins(existingRecord.id)).balance;
       const client = await pool.connect();
       try {
         const referralCode = existingRecord.referralCode || createReferralCode();
@@ -949,7 +1042,7 @@ app.post('/api/auth/telegram', async (req, res) => {
         );
         existingRecord.referralCode = profile.rows[0]?.referral_code || referralCode;
         const coins = await client.query('SELECT balance FROM platform_coin_accounts WHERE user_id = $1', [existingRecord.id]);
-        coinBalance = Number(coins.rows[0]?.balance || 0);
+        coinBalance = Number(coins.rows[0]?.balance || coinBalance);
       } finally { client.release(); }
     } catch (err) { console.warn('[Platform Coins] Could not load Telegram coin profile:', err); }
     const token = 'tg_token_' + Buffer.from(`${existingRecord.id}:${Date.now()}`).toString('base64');
@@ -957,6 +1050,7 @@ app.post('/api/auth/telegram', async (req, res) => {
     return res.json({
       success: true,
       token,
+      sessionToken: telegramAuthVerified ? createSessionToken(existingRecord.id) : undefined,
       isNewUser,
       startParam: startParam || null,
       user: {
@@ -1621,6 +1715,214 @@ app.get('/api/coins/:userId', async (req, res) => {
   }
 });
 
+// Server-authoritative Tete Coin Bead 16 matches. All coin movements and game
+// state transitions are committed together so retries cannot duplicate payouts.
+app.post('/api/coins/ai-matches', async (req, res) => {
+  await platformInitialization;
+  const userId = getSessionUserId(req);
+  if (!userId) return res.status(401).json({ error: 'Please sign in again to play for Tete Coins.' });
+  const stake = Number(req.body?.stake);
+  const requestId = String(req.body?.requestId || '').slice(0, 80);
+  if (!requestId) return res.status(400).json({ error: 'Missing match request ID.' });
+  if (!Number.isSafeInteger(stake) || stake < 1 || stake > 100000) return res.status(400).json({ error: 'Stake must be between 1 and 100,000 Tete Coins.' });
+  const matchId = `TC-${crypto.randomBytes(12).toString('hex')}`;
+  const state = { board: createInitialBead16Board(), turn: 'p2' as BeadPlayer, mustContinueJumpNode: null as number | null, lastMoveTrail: null as null | { from: number; to: number }, sequence: 0, lastMoveId: null as string | null, turnDeadlineAt: Date.now() + 60 * 60 * 1000 };
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const previous = await client.query('SELECT id, stake, state, status FROM platform_coin_ai_matches WHERE user_id = $1 AND client_request_id = $2 FOR UPDATE', [userId, requestId]);
+    if (previous.rows[0]) {
+      const account = await client.query('SELECT balance FROM platform_coin_accounts WHERE user_id = $1', [userId]);
+      await client.query('COMMIT');
+      return res.json({ matchId: previous.rows[0].id, state: previous.rows[0].state, balance: Number(account.rows[0]?.balance || 0), stake: Number(previous.rows[0].stake), status: previous.rows[0].status });
+    }
+    const account = await client.query('SELECT balance FROM platform_coin_accounts WHERE user_id = $1 FOR UPDATE', [userId]);
+    const balance = Number(account.rows[0]?.balance || 0);
+    if (balance < stake) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Not enough Tete Coins for this stake.', balance });
+    }
+    await client.query(
+      `INSERT INTO platform_coin_ledger (user_id, amount, reason, idempotency_key, metadata) VALUES ($1,$2,'ai_match_stake',$3,$4::jsonb)`,
+      [userId, stake, `coin-match:${matchId}:stake`, JSON.stringify({ matchId, gameMode: 'bead16' })]
+    );
+    const updated = await client.query(
+      'UPDATE platform_coin_accounts SET balance = balance - $2, updated_at = CURRENT_TIMESTAMP WHERE user_id = $1 AND balance >= $2 RETURNING balance',
+      [userId, stake]
+    );
+    if (!updated.rows[0]) throw new Error('Coin balance changed while starting the match.');
+    await client.query(
+      `INSERT INTO platform_coin_ai_matches (id, user_id, game_mode, stake, client_request_id, state) VALUES ($1,$2,'bead16',$3,$4,$5::jsonb)`,
+      [matchId, userId, stake, requestId, JSON.stringify(state)]
+    );
+    await client.query('COMMIT');
+    return res.json({ matchId, state, balance: Number(updated.rows[0].balance), stake, status: 'ACTIVE' });
+  } catch (error: any) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    console.error('[Tete Coin AI Match] Start failed:', error);
+    return res.status(503).json({ error: error.message || 'Could not start the match.' });
+  } finally { client.release(); }
+});
+
+app.get('/api/coins/ai-matches/:matchId', async (req, res) => {
+  await platformInitialization;
+  const userId = getSessionUserId(req);
+  if (!userId) return res.status(401).json({ error: 'Please sign in again to continue this match.' });
+  try {
+    const result = await pool.query('SELECT id, stake, state, status, winner FROM platform_coin_ai_matches WHERE id = $1 AND user_id = $2', [req.params.matchId, userId]);
+    if (!result.rows[0]) return res.status(404).json({ error: 'Match not found.' });
+    const account = await pool.query('SELECT balance FROM platform_coin_accounts WHERE user_id = $1', [userId]);
+    return res.json({ matchId: result.rows[0].id, stake: Number(result.rows[0].stake), state: result.rows[0].state, status: result.rows[0].status, winner: result.rows[0].winner, balance: Number(account.rows[0]?.balance || 0) });
+  } catch (error) {
+    console.error('[Tete Coin AI Match] Load failed:', error);
+    return res.status(503).json({ error: 'Match state is temporarily unavailable.' });
+  }
+});
+
+app.post('/api/coins/ai-matches/:matchId/moves', async (req, res) => {
+  await platformInitialization;
+  const userId = getSessionUserId(req);
+  if (!userId) return res.status(401).json({ error: 'Please sign in again to continue this match.' });
+  const from = Number(req.body?.from);
+  const to = Number(req.body?.to);
+  const moveId = String(req.body?.moveId || '').slice(0, 80);
+  const expectedSequence = Number(req.body?.expectedSequence);
+  if (!Number.isInteger(from) || !Number.isInteger(to) || !moveId || !Number.isSafeInteger(expectedSequence)) return res.status(400).json({ error: 'A valid move and match sequence are required.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const selected = await client.query('SELECT * FROM platform_coin_ai_matches WHERE id = $1 AND user_id = $2 FOR UPDATE', [req.params.matchId, userId]);
+    const match = selected.rows[0];
+    if (!match) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Match not found.' }); }
+    const state = match.state as { board: BeadPiece[]; turn: BeadPlayer; mustContinueJumpNode: number | null; lastMoveTrail: { from: number; to: number } | null; sequence: number; lastMoveId: string | null; turnDeadlineAt: number };
+    if (state.lastMoveId === moveId) {
+      await client.query('COMMIT');
+      const account = await client.query('SELECT balance FROM platform_coin_accounts WHERE user_id = $1', [userId]);
+      return res.json({ matchId: match.id, state, status: match.status, winner: match.winner, balance: Number(account.rows[0]?.balance || 0), stake: Number(match.stake) });
+    }
+    if (match.status !== 'ACTIVE') { await client.query('ROLLBACK'); return res.status(409).json({ error: 'This match has already ended.' }); }
+    if (Number(state.sequence || 0) !== expectedSequence) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Match state changed. Refreshing the board.' }); }
+    if (Number(state.turnDeadlineAt) <= Date.now()) {
+      await client.query(`UPDATE platform_coin_ai_matches SET status = 'SETTLED', winner = 'p1', updated_at = CURRENT_TIMESTAMP, settled_at = CURRENT_TIMESTAMP WHERE id = $1`, [match.id]);
+      const account = await client.query('SELECT balance FROM platform_coin_accounts WHERE user_id = $1', [userId]);
+      await client.query('COMMIT');
+      return res.json({ matchId: match.id, state, status: 'SETTLED', winner: 'p1', balance: Number(account.rows[0]?.balance || 0), stake: Number(match.stake) });
+    }
+    if (state.turn !== 'p2') { await client.query('ROLLBACK'); return res.status(409).json({ error: 'It is not your turn.' }); }
+
+    let board = state.board;
+    let turn: BeadPlayer = state.turn;
+    let mustContinueJumpNode = state.mustContinueJumpNode;
+    let lastMoveTrail: { from: number; to: number } | null = state.lastMoveTrail;
+    let winner: BeadPlayer | null = null;
+    const legalMoves = getLegalBead16Moves(board, 'p2', mustContinueJumpNode);
+    const requested = legalMoves.find((move: Move) => move.from === from && move.to === to);
+    if (!requested) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'That move is not legal.' }); }
+
+    const applyTurnMove = (move: Move, player: BeadPlayer) => {
+      board = applyBead16Move(board, move);
+      lastMoveTrail = { from: move.from, to: move.to };
+      const followUps = move.captured !== undefined ? getLegalBead16Moves(board, player, move.to).filter((candidate: Move) => candidate.captured !== undefined) : [];
+      if (followUps.length) { mustContinueJumpNode = move.to; turn = player; return; }
+      mustContinueJumpNode = null;
+      const result = checkBead16Winner(board);
+      if (result.winner) { winner = result.winner; return; }
+      turn = player === 'p1' ? 'p2' : 'p1';
+    };
+
+    applyTurnMove(requested, 'p2');
+    // If a user capture creates a multi-jump chain, the user retains the turn.
+    // The client can submit the next legal jump as another persisted action.
+    let botMoves = 0;
+    while (!winner && (turn as BeadPlayer) === 'p1' && botMoves++ < 40) {
+      const available = getLegalBead16Moves(board, 'p1', mustContinueJumpNode);
+      const preferred = getBestBead16AIMove(board, 'p1');
+      const botMove = (preferred && available.some((candidate: Move) => candidate.from === preferred.from && candidate.to === preferred.to) ? preferred : available[0]);
+      if (!botMove) { winner = 'p2'; break; }
+      applyTurnMove(botMove, 'p1');
+    }
+    if (!winner && (turn as BeadPlayer) === 'p1' && botMoves >= 40) throw new Error('AI turn exceeded its move limit.');
+
+    const nextState = { ...state, board, turn, mustContinueJumpNode, lastMoveTrail, sequence: Number(state.sequence || 0) + 1, lastMoveId: moveId, turnDeadlineAt: Date.now() + 60 * 60 * 1000 };
+    let balance: number | null = null;
+    if (winner) {
+      if (winner === 'p2') {
+        const metadata = { matchId: match.id, gameMode: 'bead16' };
+        await creditPlatformCoinsInTransaction(client, userId, Number(match.stake) * 2, 'ai_match_payout', `coin-match:${match.id}:payout`, metadata);
+        await creditPlatformCoinsInTransaction(client, userId, COINS_PER_GAME_WIN, 'game_win', `match-win:${match.id}:${userId}`, metadata);
+      }
+      await awardReferralFirstGameInTransaction(client, userId, match.id);
+      const account = await client.query('SELECT balance FROM platform_coin_accounts WHERE user_id = $1', [userId]);
+      balance = Number(account.rows[0]?.balance || 0);
+      await client.query(`UPDATE platform_coin_ai_matches SET state = $2::jsonb, status = 'SETTLED', winner = $3, updated_at = CURRENT_TIMESTAMP, settled_at = CURRENT_TIMESTAMP WHERE id = $1`, [match.id, JSON.stringify(nextState), winner]);
+    } else {
+      await client.query('UPDATE platform_coin_ai_matches SET state = $2::jsonb, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [match.id, JSON.stringify(nextState)]);
+      const account = await client.query('SELECT balance FROM platform_coin_accounts WHERE user_id = $1', [userId]);
+      balance = Number(account.rows[0]?.balance || 0);
+    }
+    await client.query('COMMIT');
+    return res.json({ matchId: match.id, state: nextState, status: winner ? 'SETTLED' : 'ACTIVE', winner, balance, stake: Number(match.stake) });
+  } catch (error: any) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    console.error('[Tete Coin AI Match] Move failed:', error);
+    return res.status(503).json({ error: error.message || 'Could not apply the move.' });
+  } finally { client.release(); }
+});
+
+app.post('/api/coins/ai-matches/:matchId/timeout', async (req, res) => {
+  await platformInitialization;
+  const userId = getSessionUserId(req);
+  if (!userId) return res.status(401).json({ error: 'Please sign in again to continue this match.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const selected = await client.query('SELECT * FROM platform_coin_ai_matches WHERE id = $1 AND user_id = $2 FOR UPDATE', [req.params.matchId, userId]);
+    const match = selected.rows[0];
+    if (!match) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Match not found.' }); }
+    const state = match.state as { turnDeadlineAt?: number };
+    if (match.status === 'ACTIVE' && Number(state.turnDeadlineAt || 0) > Date.now()) {
+      const remainingSeconds = Math.max(1, Math.ceil((Number(state.turnDeadlineAt) - Date.now()) / 1000));
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Your turn is still active.', remainingSeconds });
+    }
+    if (match.status === 'ACTIVE') {
+      await awardReferralFirstGameInTransaction(client, userId, match.id);
+      await client.query(`UPDATE platform_coin_ai_matches SET status = 'SETTLED', winner = 'p1', updated_at = CURRENT_TIMESTAMP, settled_at = CURRENT_TIMESTAMP WHERE id = $1`, [match.id]);
+    }
+    const account = await client.query('SELECT balance FROM platform_coin_accounts WHERE user_id = $1', [userId]);
+    await client.query('COMMIT');
+    return res.json({ matchId: match.id, state: match.state, status: 'SETTLED', winner: match.winner || 'p1', balance: Number(account.rows[0]?.balance || 0), stake: Number(match.stake) });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    console.error('[Tete Coin AI Match] Timeout settlement failed:', error);
+    return res.status(503).json({ error: 'Could not settle the expired turn.' });
+  } finally { client.release(); }
+});
+
+app.post('/api/coins/ai-matches/:matchId/forfeit', async (req, res) => {
+  await platformInitialization;
+  const userId = getSessionUserId(req);
+  if (!userId) return res.status(401).json({ error: 'Please sign in again to continue this match.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const selected = await client.query('SELECT * FROM platform_coin_ai_matches WHERE id = $1 AND user_id = $2 FOR UPDATE', [req.params.matchId, userId]);
+    const match = selected.rows[0];
+    if (!match) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Match not found.' }); }
+    if (match.status === 'ACTIVE') {
+      await awardReferralFirstGameInTransaction(client, userId, match.id);
+      await client.query(`UPDATE platform_coin_ai_matches SET status = 'SETTLED', winner = 'p1', updated_at = CURRENT_TIMESTAMP, settled_at = CURRENT_TIMESTAMP WHERE id = $1`, [match.id]);
+    }
+    const account = await client.query('SELECT balance FROM platform_coin_accounts WHERE user_id = $1', [userId]);
+    await client.query('COMMIT');
+    return res.json({ matchId: match.id, state: match.state, status: 'SETTLED', winner: match.winner || 'p1', balance: Number(account.rows[0]?.balance || 0), stake: Number(match.stake) });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    console.error('[Tete Coin AI Match] Forfeit failed:', error);
+    return res.status(503).json({ error: 'Could not forfeit the match.' });
+  } finally { client.release(); }
+});
+
 app.post('/api/escrow/sync-user', async (req, res) => {
   try {
     const { userId, username, displayName, email, initialBalance, totalMatchesPlayed, matchesWon, matchesLost } = req.body;
@@ -1660,7 +1962,7 @@ let platformBankDetails = {
 };
 
 // Initialize platform settings from database on server startup
-(async () => {
+platformInitialization = (async () => {
   await ensurePlatformSettingsTable();
   const savedBank = await getPlatformSetting('platform_bank_details', platformBankDetails);
   if (savedBank && savedBank.bankName) {

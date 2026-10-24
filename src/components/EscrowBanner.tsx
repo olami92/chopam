@@ -55,12 +55,12 @@ export const EscrowBanner: React.FC<EscrowBannerProps> = ({ gameTitle }) => {
             {activeMatch.status === 'completed' ? (
               <>
                 <Check className="w-3 h-3" />
-                <span>ESCROW SETTLED</span>
+                <span>{activeMatch.coinMatchId ? 'TETE COINS SETTLED' : 'ESCROW SETTLED'}</span>
               </>
             ) : (
               <>
                 <ShieldCheck className="w-3 h-3" />
-                <span>ESCROW LOCKED</span>
+                <span>{activeMatch.coinMatchId ? 'TETE COINS STAKED' : 'ESCROW LOCKED'}</span>
               </>
             )}
           </div>
@@ -68,7 +68,7 @@ export const EscrowBanner: React.FC<EscrowBannerProps> = ({ gameTitle }) => {
           <div className="flex items-center gap-1 min-w-0">
             <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Pot:</span>
             <span className="text-xs font-black text-amber-500 tracking-tight">
-              ₦{activeMatch.pot.toLocaleString()}
+              {activeMatch.coinMatchId ? `◉ ${activeMatch.pot.toLocaleString()}` : `₦${activeMatch.pot.toLocaleString()}`}
             </span>
           </div>
         </div>
@@ -93,13 +93,13 @@ export const EscrowBanner: React.FC<EscrowBannerProps> = ({ gameTitle }) => {
             {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-slate-400" />}
           </button>
 
-          <button
+          {!activeMatch.coinMatchId && <button
             onClick={handleShare}
             title="Invite Telegram Friend"
             className="p-1.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-400 border border-sky-500/30 cursor-pointer"
           >
             <Share2 className="w-3.5 h-3.5" />
-          </button>
+          </button>}
 
           <button
             onClick={() => setShowConfirmQuit(true)}
@@ -127,7 +127,9 @@ export const EscrowBanner: React.FC<EscrowBannerProps> = ({ gameTitle }) => {
           <div className="w-full max-w-xs bg-slate-900 border border-rose-500/30 rounded-2xl p-4 text-center space-y-3">
             <h3 className="text-sm font-bold text-white">Forfeit Match?</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Exiting will forfeit your ₦{activeMatch.stake.toLocaleString()} escrow stake to the opponent.
+              {activeMatch.coinMatchId
+                ? `Exiting will forfeit your ${activeMatch.stake.toLocaleString()} Tete Coin stake.`
+                : `Exiting will forfeit your ₦${activeMatch.stake.toLocaleString()} escrow stake to the opponent.`}
             </p>
             <div className="flex gap-2 pt-1">
               <button

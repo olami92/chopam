@@ -190,6 +190,7 @@ export interface ActiveMatch {
   finalizedTxHash?: string;
   settledResult?: 'player' | 'opponent' | 'draw';
   settledAt?: string;
+  coinMatchId?: string;
 }
 
 // Whot Game Types
