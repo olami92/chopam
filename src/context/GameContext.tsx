@@ -1129,8 +1129,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!res.ok || !data.success) {
           return { success: false, error: data.error || 'Telegram authentication failed.' };
         }
-        if (data.sessionToken) localStorage.setItem(STORAGE_KEY_SESSION, data.sessionToken);
-        else localStorage.removeItem(STORAGE_KEY_SESSION);
+        const authToken = data.sessionToken || data.token;
+        if (authToken) localStorage.setItem(STORAGE_KEY_SESSION, authToken);
 
         const cleanIdentifier = data.user.username;
         const savedUserRaw =

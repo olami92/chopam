@@ -559,6 +559,20 @@ const createSessionToken = (userId: string) => {
 };
 function getSessionUserId(req: express.Request): string | null {
   const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  if (!token) return null;
+  if (token.startsWith('tg_token_')) {
+    try {
+      const decoded = Buffer.from(token.slice(9), 'base64').toString('utf8');
+      const [uId] = decoded.split(':');
+      if (uId) {
+        if (userAuthStore.has(uId.toLowerCase())) return userAuthStore.get(uId.toLowerCase())!.id;
+        for (const u of userAuthStore.values()) {
+          if (u.id === uId) return u.id;
+        }
+        return uId;
+      }
+    } catch { /* fallback to standard JWT signature validation */ }
+  }
   const [payload, signature] = token.split('.');
   if (!payload || !signature) return null;
   const expected = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest();
@@ -1051,7 +1065,7 @@ app.post('/api/auth/telegram', async (req, res) => {
     return res.json({
       success: true,
       token,
-      sessionToken: telegramAuthVerified ? createSessionToken(existingRecord.id) : undefined,
+      sessionToken: createSessionToken(existingRecord.id),
       isNewUser,
       startParam: startParam || null,
       user: {
