@@ -1305,15 +1305,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return true;
     } catch (error: any) {
       addNotification({ title: 'Move not applied', message: error?.message || 'The server could not verify that move. Refresh the match state and try again.', type: 'system' });
-      if (error?.status === 409) {
-        try {
-          const { TeteCoinMatchService, publishCoinGameState } = await import('../services/teteCoinMatchService');
-          const current = await TeteCoinMatchService.load(matchId);
-          updateTeteCoinBalance(current.balance);
-          if (Number.isFinite(current.state?.turnDeadlineAt)) setActiveMatch((prev) => prev?.coinMatchId === matchId ? { ...prev, turnDeadlineAt: current.state.turnDeadlineAt } : prev);
-          publishCoinGameState(activeMatch.gameMode, current);
-        } catch { /* Keep the saved server state as the recovery source. */ }
-      }
+      // The board may have been updated optimistically. Always reload the
+      // authoritative state after a failed request so it can roll back cleanly.
+      try {
+        const { TeteCoinMatchService, publishCoinGameState } = await import('../services/teteCoinMatchService');
+        const current = await TeteCoinMatchService.load(matchId);
+        updateTeteCoinBalance(current.balance);
+        if (Number.isFinite(current.state?.turnDeadlineAt)) setActiveMatch((prev) => prev?.coinMatchId === matchId ? { ...prev, turnDeadlineAt: current.state.turnDeadlineAt } : prev);
+        publishCoinGameState(activeMatch.gameMode, current);
+      } catch { /* The next match-state refresh can restore the server state. */ }
       return false;
     }
   }, [activeMatch?.coinMatchId, activeMatch?.gameMode, updateTeteCoinBalance, completeCoinAiMatch, addNotification]);
