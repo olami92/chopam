@@ -3,6 +3,7 @@ import { DraughtsPiece, DraughtsPieceColor, DraughtsMove, TURN_MODE_SECONDS } fr
 import { sound } from '../services/audio';
 import { telegram } from '../services/telegram';
 import { useGame } from '../context/GameContext';
+import { getBestDraughtsAIMove } from '../utils/teteCoinGameEngine';
 
 export const BOARD_SIZE = 10; // 10x10 International & Nigerian Draughts
 export const PIECES_PER_SIDE = 20; // 4 rows of 5 pieces
@@ -618,29 +619,7 @@ export function useDraughtsGame(onGameOver: (winner: 'player' | 'opponent') => v
 
     aiThinkingRef.current = true;
     const timer = setTimeout(() => {
-      const crimsonPieces = pieces.filter((p) => p.color === 'crimson');
-
-      // Check if AI has mandatory captures
-      const aiCaptures = getCapturesForColor('crimson', pieces);
-
-      let chosenMove: DraughtsMove | null = null;
-
-      if (aiCaptures.length > 0) {
-        // Compulsory Capture: AI MUST pick a capture jump
-        const chosenPieceCapture = aiCaptures[Math.floor(Math.random() * aiCaptures.length)];
-        chosenMove = chosenPieceCapture.moves[Math.floor(Math.random() * chosenPieceCapture.moves.length)];
-      } else {
-        // Collect all legal quiet moves
-        const allLegalMoves: DraughtsMove[] = [];
-        crimsonPieces.forEach((p) => {
-          const moves = getLegalMovesForPiece(p, pieces);
-          allLegalMoves.push(...moves);
-        });
-
-        if (allLegalMoves.length > 0) {
-          chosenMove = allLegalMoves[Math.floor(Math.random() * allLegalMoves.length)];
-        }
-      }
+      const chosenMove = getBestDraughtsAIMove(pieces, 'crimson', chainPieceId);
 
       if (!chosenMove) {
         // AI has no moves -> Player wins
@@ -658,7 +637,7 @@ export function useDraughtsGame(onGameOver: (winner: 'player' | 'opponent') => v
       clearTimeout(timer);
       aiThinkingRef.current = false;
     };
-  }, [turn, pieces, getCapturesForColor, getLegalMovesForPiece, executeMove, onGameOver]);
+  }, [turn, pieces, chainPieceId, executeMove, onGameOver]);
 
   const mandatoryPieceIds = mandatoryCapturePieceIds();
 

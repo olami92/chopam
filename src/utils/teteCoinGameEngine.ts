@@ -62,6 +62,119 @@ function draughtsMoves(pieces: DraughtsPiece[], color: DraughtsPiece['color'], c
   return captures.length ? captures : quiet;
 }
 
+export function getBestDraughtsAIMove(pieces: DraughtsPiece[], aiColor: DraughtsPiece['color'], chainPieceId: string | null = null): DraughtsMove | null {
+  const other = (color: DraughtsPiece['color']) => color === 'gold' ? 'crimson' : 'gold';
+  const evaluate = (board: DraughtsPiece[]) => board.reduce((score, piece) => {
+    const sign = piece.color === aiColor ? 1 : -1;
+    const advancement = piece.color === 'crimson' ? piece.row : 9 - piece.row;
+    const center = 4.5 - Math.abs(piece.col - 4.5);
+    return score + sign * ((piece.isKing ? 180 : 100) + advancement * (piece.isKing ? 1 : 3) + center * 2);
+  }, 0);
+  const apply = (board: DraughtsPiece[], move: DraughtsMove, color: DraughtsPiece['color']) => {
+    const piece = board.find(p => p.row === move.fromRow && p.col === move.fromCol)!;
+    const next = board.filter(p => p.id !== move.capturedPiece?.id).map(p => p.id === piece.id
+      ? { ...p, row: move.toRow, col: move.toCol, isKing: p.isKing || (p.color === 'gold' ? move.toRow === 0 : move.toRow === 9) }
+      : p);
+    const moved = next.find(p => p.id === piece.id)!;
+    const chain = Boolean(move.capturedPiece && draughtsMoves(next, color, moved.id).some(m => m.capturedPiece));
+    return { board: next, chainId: chain ? moved.id : null };
+  };
+  const search = (board: DraughtsPiece[], color: DraughtsPiece['color'], forcedId: string | null, turnsLeft: number, alpha: number, beta: number): number => {
+    if (turnsLeft <= 0) return evaluate(board);
+    const moves = draughtsMoves(board, color, forcedId);
+    if (!moves.length) return color === aiColor ? -10000 - turnsLeft : 10000 + turnsLeft;
+    const maximizing = color === aiColor;
+    let best = maximizing ? -Infinity : Infinity;
+    for (const move of moves) {
+      const next = apply(board, move, color);
+      const sameTurn = Boolean(next.chainId);
+      const score = search(next.board, sameTurn ? color : other(color), next.chainId, sameTurn ? turnsLeft : turnsLeft - 1, alpha, beta);
+      best = maximizing ? Math.max(best, score) : Math.min(best, score);
+      if (maximizing) alpha = Math.max(alpha, best); else beta = Math.min(beta, best);
+      if (beta <= alpha) break;
+    }
+    return best;
+  };
+
+  const moves = draughtsMoves(pieces, aiColor, chainPieceId);
+  if (!moves.length) return null;
+  let best = moves[0];
+  let bestScore = -Infinity;
+  for (const move of moves) {
+    const next = apply(pieces, move, aiColor);
+    const sameTurn = Boolean(next.chainId);
+    const score = search(next.board, sameTurn ? aiColor : other(aiColor), next.chainId, sameTurn ? 3 : 2, -Infinity, Infinity);
+    if (score > bestScore) { bestScore = score; best = move; }
+  }
+  return best;
+}
+
+function chooseWhotCard(hand: WhotCard[], state: CoinGameState, playerHandCount: number): WhotCard | null {
+  const penalty = state.pendingPenalty as { count: number; type: 2 | 5 } | null;
+  const valid = hand.filter(card => penalty
+    ? card.number === penalty.type
+    : card.shape === 'whot' || (state.currentNumber === null ? card.shape === state.currentShape : card.shape === state.currentShape || card.number === state.currentNumber));
+  if (!valid.length) return null;
+  const frequency = new Map<string, number>();
+  for (const card of hand) if (card.shape !== 'whot') frequency.set(card.shape, (frequency.get(card.shape) || 0) + 1);
+  return valid.reduce((best, card) => {
+    const after = hand.filter(c => c.id !== card.id);
+    const shape = card.shape === 'whot'
+      ? [...frequency.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
+      : card.shape;
+    const shapeSupport = shape ? after.filter(c => c.shape === shape).length : 0;
+    const canFinish = after.length === 0 && !card.isSpecial && card.number !== 20;
+    const tactical = card.number === 2 || card.number === 5 ? 90 + Math.min(playerHandCount, 8) * 8
+      : card.number === 14 ? 45 + Math.min(playerHandCount, 8) * 3
+      : card.number === 1 || card.number === 8 ? 40
+      : 0;
+    const score = (canFinish ? 10000 : 0) + tactical + shapeSupport * 12 - (card.number === 20 ? 35 : 0) - (card.isSpecial ? 0 : 4);
+    const bestScore = (() => {
+      const bestAfter = hand.filter(c => c.id !== best.id);
+      const bestShape = best.shape === 'whot' ? [...frequency.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] : best.shape;
+      const bestSupport = bestShape ? bestAfter.filter(c => c.shape === bestShape).length : 0;
+      return (bestAfter.length === 0 && !best.isSpecial && best.number !== 20 ? 10000 : 0)
+        + (best.number === 2 || best.number === 5 ? 90 + Math.min(playerHandCount, 8) * 8 : best.number === 14 ? 45 + Math.min(playerHandCount, 8) * 3 : best.number === 1 || best.number === 8 ? 40 : 0)
+        + bestSupport * 12 - (best.number === 20 ? 35 : 0) - (best.isSpecial ? 0 : 4);
+    })();
+    return score > bestScore ? card : best;
+  }, valid[0]);
+}
+
+function chooseLudoToken(state: CoinGameState, side: 'player' | 'opponent', value: number): LudoToken | null {
+  const own: LudoToken[] = state[side === 'player' ? 'playerTokens' : 'opponentTokens'];
+  const enemy: LudoToken[] = state[side === 'player' ? 'opponentTokens' : 'playerTokens'];
+  const color = side === 'player' ? 'red' : 'yellow';
+  const safe = [0, 8, 13, 21, 26, 34, 39, 47];
+  const choices = own.filter(token => canLudoMove(token, value));
+  if (!choices.length) return null;
+  const scoreToken = (token: LudoToken) => {
+    const step = token.step === -1 ? 0 : token.step + value;
+    const absolute = step < 51 ? ((color === 'red' ? step : step + 26) % 52) : null;
+    const capture = absolute !== null && !safe.includes(absolute) && enemy.some(e => e.step >= 0 && e.step < 51 && ((e.color === 'red' ? e.step : e.step + 26) % 52) === absolute);
+    const threatened = step < 51 && own.some(other => other.id !== token.id && other.step >= 0 && other.step < 51 && Math.abs(other.step - step) <= 6);
+    return (capture ? 1000 : 0) + (step === 56 ? 1500 : 0) + (token.step === -1 ? 180 : 0)
+      + (absolute !== null && safe.includes(absolute) ? 100 : 0) + step * 3 + (threatened ? -20 : 0);
+  };
+  return choices.reduce((best, token) => scoreToken(token) > scoreToken(best) ? token : best, choices[0]);
+}
+
+function chooseLudoCard(state: CoinGameState, hand: { id: string; value: number }[]): { card: { id: string; value: number }; token: LudoToken } | null {
+  const options = hand.map(card => ({ card, token: chooseLudoToken(state, 'opponent', card.value) }))
+    .filter((item): item is { card: { id: string; value: number }; token: LudoToken } => Boolean(item.token));
+  if (!options.length) return null;
+  const score = (item: { card: { id: string; value: number }; token: LudoToken }) => {
+    const after = item.token.step === -1 ? 0 : item.token.step + item.card.value;
+    const color = item.token.color;
+    const absolute = after < 51 ? ((color === 'red' ? after : after + 26) % 52) : null;
+    const safe = [0, 8, 13, 21, 26, 34, 39, 47];
+    const victims = state.playerTokens as LudoToken[];
+    const capture = absolute !== null && !safe.includes(absolute) && victims.some(t => t.step >= 0 && t.step < 51 && ((t.color === 'red' ? t.step : t.step + 26) % 52) === absolute);
+    return (capture ? 1000 : 0) + (after === 56 ? 1500 : 0) + (item.token.step === -1 ? 180 : 0) + after * 3;
+  };
+  return options.reduce((best, item) => score(item) > score(best) ? item : best, options[0]);
+}
+
 function canLudoMove(token: LudoToken, value: number) { return token.step < 56 && (token.step === -1 ? value === 6 : token.step + value <= 56); }
 function moveLudo(state: CoinGameState, player: 'player'|'opponent', tokenId: string, value: number) {
   const mineKey = player === 'player' ? 'playerTokens' : 'opponentTokens', otherKey = player === 'player' ? 'opponentTokens' : 'playerTokens';
@@ -125,10 +238,14 @@ export function applyCoinGameAction(mode: GameMode, current: CoinGameState, acti
       let aiTurns=0;
       while(state.turn==='opponent'&&aiTurns++<30&&!winner) {
         const hand=state.opponentHand as WhotCard[];
-        const penalty=state.pendingPenalty as {count:number;type:2|5}|null;
-        const valid=hand.find(c=>penalty?c.number===penalty.type:c.shape==='whot'||(state.currentNumber===null?c.shape===state.currentShape:c.shape===state.currentShape||c.number===state.currentNumber));
-        if(!valid) { drawWhotCards(state,'opponent',penalty?.count||1); state.pendingPenalty=null; state.isChoosingShape=false; state.turn='player'; break; }
-        winner=doWhotPlay(state,'opponent',valid.id,valid.shape==='whot'?'circle':undefined);
+        const valid=chooseWhotCard(hand,state,(state.playerHand as WhotCard[]).length);
+        if(!valid) { const penalty=state.pendingPenalty as {count:number;type:2|5}|null; drawWhotCards(state,'opponent',penalty?.count||1); state.pendingPenalty=null; state.isChoosingShape=false; state.turn='player'; break; }
+        const shapeCounts = new Map<string, number>();
+        for (const card of hand) if (card.id !== valid.id && card.shape !== 'whot') shapeCounts.set(card.shape, (shapeCounts.get(card.shape) || 0) + 1);
+        const declaredShape = valid.shape === 'whot'
+          ? [...shapeCounts.entries()].sort((a,b) => b[1]-a[1])[0]?.[0] as WhotShape | undefined || 'circle'
+          : undefined;
+        winner=doWhotPlay(state,'opponent',valid.id,declaredShape);
         if(state.isChoosingShape){state.currentShape='circle';state.isChoosingShape=false;state.turn='player';}
       }
       if(aiTurns>=30&&state.turn==='opponent') throw new Error('AI turn exceeded its action limit.');
@@ -138,11 +255,11 @@ export function applyCoinGameAction(mode: GameMode, current: CoinGameState, acti
     const legal=draughtsMoves(state.pieces,'gold',state.chainPieceId);
     const move=legal.find(m=>m.fromRow===action.fromRow&&m.fromCol===action.fromCol&&m.toRow===action.toRow&&m.toCol===action.toCol); if(!move) throw new Error('That Draughts move is not legal.');
     const apply=(m:DraughtsMove,color:'gold'|'crimson')=>{ const piece=state.pieces.find((p:DraughtsPiece)=>p.row===m.fromRow&&p.col===m.fromCol); state.pieces=state.pieces.filter((p:DraughtsPiece)=>p.id!==m.capturedPiece?.id).map((p:DraughtsPiece)=>p.id===piece.id?{...p,row:m.toRow,col:m.toCol,isKing:p.isKing||(p.color==='gold'&&m.toRow===0)||(p.color==='crimson'&&m.toRow===9)}:p); if(m.capturedPiece){const further=draughtsMoves(state.pieces,color,piece.id); if(further.some(x=>x.capturedPiece)){state.chainPieceId=piece.id; return true;}} state.chainPieceId=null; state.turn=color==='gold'?'opponent':'player'; return false; };
-    let chain=apply(move,'gold'); let loops=0; while(state.turn==='opponent'&&loops++<40){ const options=draughtsMoves(state.pieces,'crimson',state.chainPieceId); if(!options.length){winner='p2';break;} const ai=options[Math.floor(Math.random()*options.length)]; chain=apply(ai,'crimson'); if(chain) continue; if(!draughtsMoves(state.pieces,'gold',null).length) winner='p1'; break; }
+    let chain=apply(move,'gold'); let loops=0; while(state.turn==='opponent'&&loops++<40){ const ai=getBestDraughtsAIMove(state.pieces,'crimson',state.chainPieceId); if(!ai){winner='p2';break;} chain=apply(ai,'crimson'); if(chain) continue; if(!draughtsMoves(state.pieces,'gold',null).length) winner='p1'; break; }
     if(!winner&&!state.pieces.some((p:DraughtsPiece)=>p.color==='crimson')) winner='p2'; if(!winner&&!state.pieces.some((p:DraughtsPiece)=>p.color==='gold')) winner='p1';
   } else if ((mode==='ludo_classic'||mode==='ludo_blitz') && (action.type==='ludo_roll'||action.type==='ludo_move'||action.type==='ludo_blitz_move'||action.type==='ludo_blitz_pass')) {
     if(state.turn!=='player') throw new Error('It is not your turn.');
-    const doTurn=(who:'player'|'opponent',value:number,tokenId?:string)=>{ const tokens=(who==='player'?state.playerTokens:state.opponentTokens) as LudoToken[]; const choices=tokens.filter(t=>canLudoMove(t,value)); if(tokenId){if(!choices.some(t=>t.id===tokenId)) throw new Error('That token cannot move with this roll.'); const win=moveLudo(state,who,tokenId,value); return {win,extra:value===6};} if(choices.length){const pick=choices[Math.floor(Math.random()*choices.length)]; return {win:moveLudo(state,who,pick.id,value),extra:value===6};} return {win:false,extra:false}; };
+    const doTurn=(who:'player'|'opponent',value:number,tokenId?:string)=>{ const tokens=(who==='player'?state.playerTokens:state.opponentTokens) as LudoToken[]; const choices=tokens.filter(t=>canLudoMove(t,value)); if(tokenId){if(!choices.some(t=>t.id===tokenId)) throw new Error('That token cannot move with this roll.'); const win=moveLudo(state,who,tokenId,value); return {win,extra:value===6};} const pick=chooseLudoToken(state,who,value); if(pick){return {win:moveLudo(state,who,pick.id,value),extra:value===6};} return {win:false,extra:false}; };
     if(mode==='ludo_classic'&&action.type==='ludo_roll'){ if(state.diceValue!==null) throw new Error('Move your token before rolling again.'); const val=1+Math.floor(Math.random()*6); state.diceValue=val; if(!(state.playerTokens as LudoToken[]).some(t=>canLudoMove(t,val))){state.diceValue=null;state.turn='opponent';let loops=0;while(state.turn==='opponent'&&!winner&&loops++<20){const aiVal=1+Math.floor(Math.random()*6);const ai=doTurn('opponent',aiVal);if(ai.win){winner='p1';break;}state.turn=ai.extra?'opponent':'player';}} }
     else if(mode==='ludo_classic'&&action.type==='ludo_move'){ if(!state.diceValue) throw new Error('Roll before moving.'); const val=state.diceValue; const player=doTurn('player',val,action.tokenId); state.diceValue=null;if(player.win)winner='p2';else if(!player.extra){state.turn='opponent';let loops=0;while(state.turn==='opponent'&&!winner&&loops++<20){const aiVal=1+Math.floor(Math.random()*6);const ai=doTurn('opponent',aiVal);if(ai.win){winner='p1';break;}state.turn=ai.extra?'opponent':'player';}} }
     else if(mode==='ludo_blitz'&&(action.type==='ludo_blitz_move'||action.type==='ludo_blitz_pass')){
@@ -159,8 +276,8 @@ export function applyCoinGameAction(mode: GameMode, current: CoinGameState, acti
       if(!winner){
         state.turn='opponent';
         const aiHand=state.opponentBlitzCards as {id:string;value:number}[];
-        const usable=aiHand.find(c=>(state.opponentTokens as LudoToken[]).some(t=>canLudoMove(t,c.value)));
-        if(usable){const ai=doTurn('opponent',usable.value);state.opponentBlitzCards=aiHand.filter(c=>c.id!==usable.id).concat({id:`obc_${crypto.randomUUID()}`,value:1+Math.floor(Math.random()*6)});if(ai.win)winner='p1';}
+        const choice=chooseLudoCard(state,aiHand);
+        if(choice){const ai=doTurn('opponent',choice.card.value,choice.token.id);state.opponentBlitzCards=aiHand.filter(c=>c.id!==choice.card.id).concat({id:`obc_${crypto.randomUUID()}`,value:1+Math.floor(Math.random()*6)});if(ai.win)winner='p1';}
         else state.opponentBlitzCards=aiHand.slice(1).concat({id:`obc_${crypto.randomUUID()}`,value:1+Math.floor(Math.random()*6)});
         state.turn='player';
       }

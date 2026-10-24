@@ -1039,10 +1039,39 @@ export function useWhotGame(onGameOver: (winner: 'player' | 'opponent') => void)
           cardToPlay =
             validCards.find((c) => !isSpecialWhotCard(c)) || validCards[0];
         } else {
-          cardToPlay =
-            validCards.find((c) => [2, 5, 14, 8, 1].includes(c.number)) ||
-            validCards.find((c) => c.number !== 20) ||
-            validCards[0];
+          const shapeCounts = new Map<string, number>();
+          for (const card of opponentHand) {
+            if (card.shape !== 'whot') shapeCounts.set(card.shape, (shapeCounts.get(card.shape) || 0) + 1);
+          }
+          cardToPlay = validCards.reduce((best, card) => {
+            const shape = card.shape === 'whot'
+              ? [...shapeCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
+              : card.shape;
+            const remainingSupport = shape
+              ? opponentHand.filter((held) => held.id !== card.id && held.shape === shape).length
+              : 0;
+            const pressure = [2, 5].includes(card.number)
+              ? 80 + Math.min(playerHand.length, 8) * 10
+              : card.number === 14
+                ? 50 + Math.min(playerHand.length, 8) * 5
+                : [1, 8].includes(card.number) ? 40 : 0;
+            const score = remainingSupport * 12 + pressure - (card.number === 20 ? 35 : 0)
+              - (isSpecialWhotCard(card) ? 0 : 4);
+            const bestShape = best.shape === 'whot'
+              ? [...shapeCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
+              : best.shape;
+            const bestSupport = bestShape
+              ? opponentHand.filter((held) => held.id !== best.id && held.shape === bestShape).length
+              : 0;
+            const bestPressure = [2, 5].includes(best.number)
+              ? 80 + Math.min(playerHand.length, 8) * 10
+              : best.number === 14
+                ? 50 + Math.min(playerHand.length, 8) * 5
+                : [1, 8].includes(best.number) ? 40 : 0;
+            const bestScore = bestSupport * 12 + bestPressure - (best.number === 20 ? 35 : 0)
+              - (isSpecialWhotCard(best) ? 0 : 4);
+            return score > bestScore ? card : best;
+          }, validCards[0]);
         }
 
         const isAiFinishingAttempt = opponentHand.length === 1;

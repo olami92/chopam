@@ -260,46 +260,35 @@ export function getBestBead16AIMove(board: BeadPiece[], aiPlayer: BeadPlayer): M
   const moves = getLegalBead16Moves(board, aiPlayer);
   if (moves.length === 0) return null;
 
-  // 1. Prioritize capture moves (especially multi-jump potentials)
-  const captureMoves = moves.filter(m => m.captured !== undefined && m.captured !== null);
-  if (captureMoves.length > 0) {
-    let bestCapture = captureMoves[0];
-    let maxChain = 0;
-
-    for (const cap of captureMoves) {
-      const simulated = applyBead16Move(board, cap);
-      const followUps = getLegalBead16Moves(simulated, aiPlayer, cap.to);
-      if (followUps.length > maxChain) {
-        maxChain = followUps.length;
-        bestCapture = cap;
-      }
-    }
-    return bestCapture;
-  }
-
-  // 2. Evaluate step moves to control center node (19) or defend
+  const opponent: BeadPlayer = aiPlayer === 'p1' ? 'p2' : 'p1';
   let bestMove = moves[0];
-  let bestScore = -9999;
+  let bestScore = -Infinity;
 
   for (const move of moves) {
     const simulated = applyBead16Move(board, move);
-    const opponent = aiPlayer === 'p1' ? 'p2' : 'p1';
-    const opponentCaptures = getLegalBead16Moves(simulated, opponent).filter(m => m.captured !== undefined);
+    const result = checkBead16Winner(simulated);
+    let score = move.captured !== undefined ? 180 : 0;
+    if (result.winner === aiPlayer) score += 100000;
+    if (result.winner === opponent) score -= 100000;
 
-    let score = 0;
+    const followUps = move.captured !== undefined
+      ? getLegalBead16Moves(simulated, aiPlayer, move.to).filter(candidate => candidate.captured !== undefined)
+      : [];
+    score += followUps.length * 35;
 
-    // Penalty if move leaves piece vulnerable to opponent capture
-    score -= opponentCaptures.length * 50;
-
-    // Bonus for center control (node 19)
-    if (move.to === 19) score += 30;
-
-    // Bonus for advancing toward opponent territory
-    if (aiPlayer === 'p2') {
-      score += (BEAD16_NODES[move.from].y - BEAD16_NODES[move.to].y);
-    } else {
-      score += (BEAD16_NODES[move.to].y - BEAD16_NODES[move.from].y);
+    const opponentReplies = getLegalBead16Moves(simulated, opponent);
+    const opponentCaptures = opponentReplies.filter(reply => reply.captured !== undefined);
+    score -= opponentCaptures.length * 95;
+    for (const reply of opponentCaptures) {
+      const afterReply = applyBead16Move(simulated, reply);
+      if (getLegalBead16Moves(afterReply, aiPlayer).some(counter => counter.captured !== undefined)) score += 20;
     }
+
+    if (move.to === 19) score += 45;
+    score += aiPlayer === 'p2'
+      ? (BEAD16_NODES[move.from].y - BEAD16_NODES[move.to].y) * 0.8
+      : (BEAD16_NODES[move.to].y - BEAD16_NODES[move.from].y) * 0.8;
+    if (opponentReplies.length === 0) score += 300;
 
     if (score > bestScore) {
       bestScore = score;
