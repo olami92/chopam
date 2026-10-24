@@ -10,13 +10,14 @@ import { sound } from '../services/audio';
 import { telegram } from '../services/telegram';
 
 export const DraughtsGameScreen: React.FC = () => {
-  const { activeMatch, settleMatch, cancelMatch, startMatch, user } = useGame();
+  const { activeMatch, settleMatch, completeCoinAiMatch, cancelMatch, startMatch, startCoinAiMatch, user } = useGame();
   const [matchResult, setMatchResult] = useState<'player' | 'opponent' | null>(null);
   const [showRulesModal, setShowRulesModal] = useState(false);
 
   const handleGameOver = (winner: 'player' | 'opponent') => {
     setMatchResult(winner);
-    settleMatch(winner);
+    if (activeMatch?.coinMatchId) completeCoinAiMatch(winner);
+    else settleMatch(winner);
   };
 
   const {
@@ -45,7 +46,11 @@ export const DraughtsGameScreen: React.FC = () => {
   const handleRematch = () => {
     if (!activeMatch) return;
     setMatchResult(null);
-    startMatch(activeMatch.gameMode, activeMatch.stake, activeMatch.isPrivate, activeMatch.roomCode);
+    if (activeMatch.coinMatchId) {
+      void startCoinAiMatch(activeMatch.stake, activeMatch.gameMode);
+    } else {
+      startMatch(activeMatch.gameMode, activeMatch.stake, activeMatch.isPrivate, activeMatch.roomCode);
+    }
     restartGame();
   };
 

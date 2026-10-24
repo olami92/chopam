@@ -102,7 +102,7 @@ export interface PendingPenalty {
 }
 
 export function useWhotGame(onGameOver: (winner: 'player' | 'opponent') => void) {
-  const { recordReplayStep, user, activeMatch, sendP2pStateUpdate } = useGame();
+  const { recordReplayStep, user, activeMatch, sendP2pStateUpdate, submitCoinAiAction, timeoutCoinAiMatch } = useGame();
   const [playerHand, setPlayerHand] = useState<WhotCard[]>([]);
   const [opponentHand, setOpponentHand] = useState<WhotCard[]>([]);
   const [discardPile, setDiscardPile] = useState<WhotCard[]>([]);
@@ -309,6 +309,7 @@ export function useWhotGame(onGameOver: (winner: 'player' | 'opponent') => void)
   // Handle timeout when player's 20s expires (4 timeouts = automatic forfeit defeat)
   useEffect(() => {
     if (isGameOver || turn !== 'player' || turnTimeLeft > 0) return;
+    if (activeMatch?.coinMatchId) { void timeoutCoinAiMatch(); return; }
 
     sound.playTimeout();
     telegram.triggerHaptic('warning');
@@ -450,7 +451,9 @@ export function useWhotGame(onGameOver: (winner: 'player' | 'opponent') => void)
   // Player plays a card
   const playCard = useCallback(
     (card: WhotCard) => {
-      if (isGameOver || !isCardPlayable(card)) return;
+      if (isGameOver) return;
+      if (activeMatch?.coinMatchId) { void submitCoinAiAction({ type: 'whot_play', cardId: card.id }); return; }
+      if (!isCardPlayable(card)) return;
 
       const isFinishingAttempt = playerHand.length === 1;
       const isSpecial = isSpecialWhotCard(card);
@@ -807,12 +810,15 @@ export function useWhotGame(onGameOver: (winner: 'player' | 'opponent') => void)
       isP2P,
       isHost,
       sendP2pStateUpdate,
+      activeMatch?.coinMatchId,
+      submitCoinAiAction,
     ]
   );
 
   // Player chooses required shape after playing Whot 20
   const chooseShape = useCallback(
     (shape: WhotShape) => {
+      if (activeMatch?.coinMatchId) { void submitCoinAiAction({ type: 'whot_choose_shape', declaredShape: shape }); return; }
       setIsChoosingShape(false);
       setCurrentShape(shape);
       setCurrentNumber(null); // Any number of this shape is acceptable
@@ -857,12 +863,15 @@ export function useWhotGame(onGameOver: (winner: 'player' | 'opponent') => void)
       isP2P,
       isHost,
       sendP2pStateUpdate,
+      activeMatch?.coinMatchId,
+      submitCoinAiAction,
     ]
   );
 
   // Player draws from market
   const drawFromMarket = useCallback(() => {
     if (isGameOver || turn !== 'player' || isChoosingShape) return;
+    if (activeMatch?.coinMatchId) { void submitCoinAiAction({ type: 'whot_draw' }); return; }
 
     sound.playCardDraw();
     telegram.triggerHaptic('light');

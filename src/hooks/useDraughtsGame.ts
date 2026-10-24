@@ -45,7 +45,7 @@ export function createInitialDraughtsBoard(): DraughtsPiece[] {
 }
 
 export function useDraughtsGame(onGameOver: (winner: 'player' | 'opponent') => void) {
-  const { recordReplayStep, user, activeMatch, sendP2pStateUpdate } = useGame();
+  const { recordReplayStep, user, activeMatch, sendP2pStateUpdate, submitCoinAiAction, timeoutCoinAiMatch } = useGame();
   const [pieces, setPieces] = useState<DraughtsPiece[]>(createInitialDraughtsBoard);
   const [selectedPiece, setSelectedPiece] = useState<DraughtsPiece | null>(null);
   const [validMoves, setValidMoves] = useState<DraughtsMove[]>([]);
@@ -78,6 +78,9 @@ export function useDraughtsGame(onGameOver: (winner: 'player' | 'opponent') => v
       if (s) {
         if (s.pieces) setPieces(s.pieces);
         if (s.turn) setTurn(s.turn);
+        setSelectedPiece(null);
+        setValidMoves([]);
+        setChainPieceId(s.chainPieceId || null);
 
         const goldCaps = typeof s.goldCapturedCount === 'number' ? s.goldCapturedCount : (typeof s.playerCapturedCount === 'number' ? s.playerCapturedCount : 0);
         const crimsonCaps = typeof s.crimsonCapturedCount === 'number' ? s.crimsonCapturedCount : (typeof s.opponentCapturedCount === 'number' ? s.opponentCapturedCount : 0);
@@ -284,6 +287,7 @@ export function useDraughtsGame(onGameOver: (winner: 'player' | 'opponent') => v
   // Handle timeout when turnTimeLeft reaches 0: player loses turn
   useEffect(() => {
     if (isMyTurn && turnTimeLeft === 0) {
+      if (activeMatch?.coinMatchId) { void timeoutCoinAiMatch(); return; }
       sound.playTimeout();
       telegram.triggerHaptic('warning');
       setSelectedPiece(null);
@@ -587,6 +591,10 @@ export function useDraughtsGame(onGameOver: (winner: 'player' | 'opponent') => v
 
       const matchedMove = validMoves.find((m) => m.toRow === row && m.toCol === col);
       if (matchedMove) {
+        if (activeMatch?.coinMatchId) {
+          void submitCoinAiAction({ type: 'draughts_move', fromRow: matchedMove.fromRow, fromCol: matchedMove.fromCol, toRow: matchedMove.toRow, toCol: matchedMove.toCol });
+          return;
+        }
         executeMove(matchedMove, true);
       } else if (!chainPieceId) {
         // Only allow deselect if not locked in a chain capture
@@ -594,7 +602,7 @@ export function useDraughtsGame(onGameOver: (winner: 'player' | 'opponent') => v
         setValidMoves([]);
       }
     },
-    [selectedPiece, isMyTurn, validMoves, executeMove, chainPieceId]
+    [selectedPiece, isMyTurn, validMoves, executeMove, chainPieceId, activeMatch?.coinMatchId, submitCoinAiAction]
   );
 
   // AI Opponent Turn

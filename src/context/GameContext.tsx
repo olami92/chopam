@@ -381,7 +381,9 @@ interface GameContextType {
     initialStatus?: MatchStatus,
     turnMode?: TurnMode
   ) => boolean;
-  startCoinAiMatch: (stake: number) => Promise<boolean>;
+  startCoinAiMatch: (stake: number, gameMode?: GameMode) => Promise<boolean>;
+  submitCoinAiAction: (action: Record<string, unknown>) => Promise<boolean>;
+  timeoutCoinAiMatch: () => Promise<boolean>;
   updateTeteCoinBalance: (balance: number) => void;
   completeCoinAiMatch: (winner: 'player' | 'opponent') => void;
   settleMatch: (winner: 'player' | 'opponent' | 'draw') => string;
@@ -1229,6 +1231,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       location: 'Lagos, Nigeria',
       locationAutoPicked: false,
       gameStats: EMPTY_GAME_STATS,
+      coinBalance: 2000,
     };
 
     localStorage.removeItem(STORAGE_KEY_SESSION);
@@ -1289,9 +1292,54 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       : prev);
   }, []);
 
-  const startCoinAiMatch = useCallback(async (stake: number): Promise<boolean> => {
+  const submitCoinAiAction = useCallback(async (action: Record<string, unknown>): Promise<boolean> => {
+    const matchId = activeMatch?.coinMatchId;
+    if (!matchId || !activeMatch) return false;
+    try {
+      const { TeteCoinMatchService, publishCoinGameState } = await import('../services/teteCoinMatchService');
+      const result = await TeteCoinMatchService.act(matchId, action);
+      updateTeteCoinBalance(result.balance);
+      if (Number.isFinite(result.state?.turnDeadlineAt)) setActiveMatch((prev) => prev?.coinMatchId === matchId ? { ...prev, turnDeadlineAt: result.state.turnDeadlineAt } : prev);
+      publishCoinGameState(activeMatch.gameMode, result);
+      if (result.status === 'SETTLED' && result.winner) completeCoinAiMatch(result.winner === 'p2' ? 'player' : 'opponent');
+      return true;
+    } catch (error: any) {
+      addNotification({ title: 'Move not applied', message: error?.message || 'The server could not verify that move. Refresh the match state and try again.', type: 'system' });
+      if (error?.status === 409) {
+        try {
+          const { TeteCoinMatchService, publishCoinGameState } = await import('../services/teteCoinMatchService');
+          const current = await TeteCoinMatchService.load(matchId);
+          updateTeteCoinBalance(current.balance);
+          if (Number.isFinite(current.state?.turnDeadlineAt)) setActiveMatch((prev) => prev?.coinMatchId === matchId ? { ...prev, turnDeadlineAt: current.state.turnDeadlineAt } : prev);
+          publishCoinGameState(activeMatch.gameMode, current);
+        } catch { /* Keep the saved server state as the recovery source. */ }
+      }
+      return false;
+    }
+  }, [activeMatch?.coinMatchId, activeMatch?.gameMode, updateTeteCoinBalance, completeCoinAiMatch, addNotification]);
+
+  const timeoutCoinAiMatch = useCallback(async (): Promise<boolean> => {
+    if (!activeMatch?.coinMatchId) return false;
+    try {
+      const { TeteCoinMatchService, publishCoinGameState } = await import('../services/teteCoinMatchService');
+      const result = await TeteCoinMatchService.timeout(activeMatch.coinMatchId);
+      updateTeteCoinBalance(result.balance);
+      if (Number.isFinite(result.state?.turnDeadlineAt)) setActiveMatch((prev) => prev?.coinMatchId === activeMatch.coinMatchId ? { ...prev, turnDeadlineAt: result.state.turnDeadlineAt } : prev);
+      publishCoinGameState(activeMatch.gameMode, result);
+      if (result.status === 'SETTLED') completeCoinAiMatch('opponent');
+      return true;
+    } catch (error: any) {
+      if (error?.status === 409) return false;
+      addNotification({ title: 'Turn timeout pending', message: error?.message || 'The server could not settle the expired turn.', type: 'system' });
+      return false;
+    }
+  }, [activeMatch?.coinMatchId, activeMatch?.gameMode, updateTeteCoinBalance, completeCoinAiMatch, addNotification]);
+
+  const startCoinAiMatch = useCallback(async (stake: number, gameMode: GameMode = 'bead16'): Promise<boolean> => {
     if (coinMatchStarting.current) return false;
     if (!localStorage.getItem(STORAGE_KEY_SESSION)) {
+      setAuthModalTab('signin');
+      setAuthModalOpen(true);
       addNotification({ title: 'Sign in required', message: 'Sign in with a verified account to play for Tete Coins.', type: 'system' });
       return false;
     }
@@ -1303,7 +1351,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user.coinBalance,
         user.username,
         isAuthenticated,
-        Boolean(activeMatch?.coinMatchId && activeMatch.status !== 'completed')
+        Boolean(activeMatch?.coinMatchId && activeMatch.status !== 'completed'),
+        gameMode
       );
       updateTeteCoinBalance(match.balance);
       clearReplaySteps();
@@ -1318,6 +1367,24 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       coinMatchStarting.current = false;
     }
   }, [isAuthenticated, activeMatch?.coinMatchId, activeMatch?.status, user.coinBalance, user.username, addNotification, updateTeteCoinBalance, clearReplaySteps]);
+
+  useEffect(() => {
+    if (!activeMatch?.coinMatchId || activeMatch.status === 'completed') return;
+    let cancelled = false;
+    void import('../services/teteCoinMatchService').then(async ({ TeteCoinMatchService, publishCoinGameState }) => {
+      try {
+        const current = await TeteCoinMatchService.load(activeMatch.coinMatchId!);
+        if (cancelled) return;
+        updateTeteCoinBalance(current.balance);
+        if (Number.isFinite(current.state?.turnDeadlineAt)) setActiveMatch((prev) => prev?.coinMatchId === activeMatch.coinMatchId ? { ...prev, turnDeadlineAt: current.state.turnDeadlineAt } : prev);
+        publishCoinGameState(activeMatch.gameMode, current);
+        if (current.status === 'SETTLED' && current.winner) completeCoinAiMatch(current.winner === 'p2' ? 'player' : 'opponent');
+      } catch (error) {
+        if (!cancelled) console.warn('Could not restore Tete Coin match state:', error);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [activeMatch?.coinMatchId, activeMatch?.gameMode, activeMatch?.status, updateTeteCoinBalance, completeCoinAiMatch]);
 
   const startMatch = useCallback(
     (
@@ -2658,6 +2725,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         walletTransactions,
         startMatch,
         startCoinAiMatch,
+        submitCoinAiAction,
+        timeoutCoinAiMatch,
         updateTeteCoinBalance,
         completeCoinAiMatch,
         settleMatch,

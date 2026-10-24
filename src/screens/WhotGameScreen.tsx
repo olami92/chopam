@@ -32,7 +32,7 @@ export const RenderWhotShape: React.FC<{ shape: WhotShape; className?: string }>
 };
 
 export const WhotGameScreen: React.FC = () => {
-  const { activeMatch, settleMatch, cancelMatch, startMatch } = useGame();
+  const { activeMatch, settleMatch, completeCoinAiMatch, cancelMatch, startMatch, startCoinAiMatch } = useGame();
   const [matchResult, setMatchResult] = useState<'player' | 'opponent' | null>(null);
   const [quickEmoji, setQuickEmoji] = useState<string | null>(null);
   const [showRulesModal, setShowRulesModal] = useState(false);
@@ -44,9 +44,10 @@ export const WhotGameScreen: React.FC = () => {
       isSettledRef.current = true;
       sound.stopSpeech();
       setMatchResult(winner);
-      settleMatch(winner);
+      if (activeMatch?.coinMatchId) completeCoinAiMatch(winner);
+      else settleMatch(winner);
     },
-    [settleMatch]
+    [settleMatch, activeMatch?.coinMatchId, completeCoinAiMatch]
   );
 
   useEffect(() => {
@@ -84,7 +85,11 @@ export const WhotGameScreen: React.FC = () => {
     isSettledRef.current = false;
     sound.stopSpeech();
     setMatchResult(null);
-    startMatch(activeMatch.gameMode, activeMatch.stake, activeMatch.isPrivate, activeMatch.roomCode);
+    if (activeMatch.coinMatchId) {
+      void startCoinAiMatch(activeMatch.stake, activeMatch.gameMode);
+    } else {
+      startMatch(activeMatch.gameMode, activeMatch.stake, activeMatch.isPrivate, activeMatch.roomCode);
+    }
     restartGame();
   };
 

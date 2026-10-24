@@ -91,7 +91,7 @@ export const Bead16GameScreen: React.FC = () => {
   // Player role assignment for the local client:
   // - In Bot matches: User = P2 (Blue, Bottom), Bot = P1 (Red, Top)
   // - In P2P human matches: Host = P1 (Red, Top), Joiner = P2 (Blue, Bottom)
-  const myRole: BeadPlayer = isBotMatch ? 'p2' : (isHost ? 'p1' : 'p2');
+  const myRole: BeadPlayer = isCoinMatch || isBotMatch ? 'p2' : (isHost ? 'p1' : 'p2');
   const oppRole: BeadPlayer = myRole === 'p1' ? 'p2' : 'p1';
   const isMyTurn = turn === myRole;
 

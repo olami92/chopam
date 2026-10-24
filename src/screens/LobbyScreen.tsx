@@ -77,6 +77,7 @@ export const LobbyScreen: React.FC = () => {
     { id: 'ludo_classic', label: 'Classic Ludo' },
     { id: 'ludo_blitz', label: 'Ludo Blitz' },
     { id: 'draughts', label: 'Draughts' },
+    { id: 'bead16', label: 'Bead 16' },
   ];
 
   const filteredTables = openTables.filter((table) => {

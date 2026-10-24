@@ -12,6 +12,7 @@ import { pool } from './src/db/index';
 import { telegramBotListener, TelegramWithdrawalData, TelegramFiatDepositData } from './server/telegramBot';
 import { liveChatService } from './server/liveChat';
 import { applyBead16Move, checkBead16Winner, createInitialBead16Board, getBestBead16AIMove, getLegalBead16Moves, BeadPiece, BeadPlayer, Move } from './src/utils/bead16Engine';
+import { applyCoinGameAction, CoinGameAction, CoinGameState, createCoinGameState } from './src/utils/teteCoinGameEngine';
 
 const USERS_FILE_PATH = path.join(process.cwd(), 'users_data.json');
 
@@ -1731,11 +1732,15 @@ app.post('/api/coins/ai-matches', async (req, res) => {
   const userId = getSessionUserId(req);
   if (!userId) return res.status(401).json({ error: 'Please sign in again to play for Tete Coins.' });
   const stake = Number(req.body?.stake);
+  const requestedMode = String(req.body?.gameMode || 'bead16').toLowerCase();
+  const gameMode = ['whot', 'ludo_classic', 'ludo_blitz', 'draughts', 'bead16'].includes(requestedMode) ? requestedMode : null;
   const requestId = String(req.body?.requestId || '').slice(0, 80);
+  if (!gameMode) return res.status(400).json({ error: 'Unsupported Tete Coin game mode.' });
   if (!requestId) return res.status(400).json({ error: 'Missing match request ID.' });
   if (!Number.isSafeInteger(stake) || stake < 1 || stake > 100000) return res.status(400).json({ error: 'Stake must be between 1 and 100,000 Tete Coins.' });
   const matchId = `TC-${crypto.randomBytes(12).toString('hex')}`;
-  const state = { board: createInitialBead16Board(), turn: 'p2' as BeadPlayer, mustContinueJumpNode: null as number | null, lastMoveTrail: null as null | { from: number; to: number }, sequence: 0, lastMoveId: null as string | null, turnDeadlineAt: Date.now() + 60 * 60 * 1000 };
+  let state: CoinGameState;
+  try { state = createCoinGameState(gameMode as any); } catch (error) { return res.status(400).json({ error: 'Could not initialize this game.' }); }
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -1753,7 +1758,7 @@ app.post('/api/coins/ai-matches', async (req, res) => {
     }
     await client.query(
       `INSERT INTO platform_coin_ledger (user_id, amount, reason, idempotency_key, metadata) VALUES ($1,$2,'ai_match_stake',$3,$4::jsonb)`,
-      [userId, stake, `coin-match:${matchId}:stake`, JSON.stringify({ matchId, gameMode: 'bead16' })]
+      [userId, stake, `coin-match:${matchId}:stake`, JSON.stringify({ matchId, gameMode })]
     );
     const updated = await client.query(
       'UPDATE platform_coin_accounts SET balance = balance - $2, updated_at = CURRENT_TIMESTAMP WHERE user_id = $1 AND balance >= $2 RETURNING balance',
@@ -1761,8 +1766,8 @@ app.post('/api/coins/ai-matches', async (req, res) => {
     );
     if (!updated.rows[0]) throw new Error('Coin balance changed while starting the match.');
     await client.query(
-      `INSERT INTO platform_coin_ai_matches (id, user_id, game_mode, stake, client_request_id, state) VALUES ($1,$2,'bead16',$3,$4,$5::jsonb)`,
-      [matchId, userId, stake, requestId, JSON.stringify(state)]
+      `INSERT INTO platform_coin_ai_matches (id, user_id, game_mode, stake, client_request_id, state) VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
+      [matchId, userId, gameMode, stake, requestId, JSON.stringify(state)]
     );
     await client.query('COMMIT');
     return res.json({ matchId, state, balance: Number(updated.rows[0].balance), stake, status: 'ACTIVE' });
@@ -1792,18 +1797,19 @@ app.post('/api/coins/ai-matches/:matchId/moves', async (req, res) => {
   await platformInitialization;
   const userId = getSessionUserId(req);
   if (!userId) return res.status(401).json({ error: 'Please sign in again to continue this match.' });
+  const action = req.body?.action as CoinGameAction | undefined;
   const from = Number(req.body?.from);
   const to = Number(req.body?.to);
   const moveId = String(req.body?.moveId || '').slice(0, 80);
   const expectedSequence = Number(req.body?.expectedSequence);
-  if (!Number.isInteger(from) || !Number.isInteger(to) || !moveId || !Number.isSafeInteger(expectedSequence)) return res.status(400).json({ error: 'A valid move and match sequence are required.' });
+  if ((!action && (!Number.isInteger(from) || !Number.isInteger(to))) || (action && typeof action.type !== 'string') || !moveId || !Number.isSafeInteger(expectedSequence)) return res.status(400).json({ error: 'A valid move and match sequence are required.' });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const selected = await client.query('SELECT * FROM platform_coin_ai_matches WHERE id = $1 AND user_id = $2 FOR UPDATE', [req.params.matchId, userId]);
     const match = selected.rows[0];
     if (!match) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Match not found.' }); }
-    const state = match.state as { board: BeadPiece[]; turn: BeadPlayer; mustContinueJumpNode: number | null; lastMoveTrail: { from: number; to: number } | null; sequence: number; lastMoveId: string | null; turnDeadlineAt: number };
+    const state = match.state as CoinGameState;
     if (state.lastMoveId === moveId) {
       await client.query('COMMIT');
       const account = await client.query('SELECT balance FROM platform_coin_accounts WHERE user_id = $1', [userId]);
@@ -1811,6 +1817,35 @@ app.post('/api/coins/ai-matches/:matchId/moves', async (req, res) => {
     }
     if (match.status !== 'ACTIVE') { await client.query('ROLLBACK'); return res.status(409).json({ error: 'This match has already ended.' }); }
     if (Number(state.sequence || 0) !== expectedSequence) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Match state changed. Refreshing the board.' }); }
+    if (action) {
+      if (Number(state.turnDeadlineAt) <= Date.now()) {
+        const timedOutState = { ...state, sequence: Number(state.sequence || 0) + 1, lastMoveId: moveId };
+        await awardReferralFirstGameInTransaction(client, userId, match.id);
+        await client.query(`UPDATE platform_coin_ai_matches SET state = $2::jsonb, status = 'SETTLED', winner = 'p1', updated_at = CURRENT_TIMESTAMP, settled_at = CURRENT_TIMESTAMP WHERE id = $1`, [match.id, JSON.stringify(timedOutState)]);
+        const account = await client.query('SELECT balance FROM platform_coin_accounts WHERE user_id = $1', [userId]);
+        await client.query('COMMIT');
+        return res.json({ matchId: match.id, state: timedOutState, status: 'SETTLED', winner: 'p1', balance: Number(account.rows[0]?.balance || 0), stake: Number(match.stake) });
+      }
+      let transition: ReturnType<typeof applyCoinGameAction>;
+      try { transition = applyCoinGameAction(match.game_mode, state, action); }
+      catch (error: any) { await client.query('ROLLBACK'); return res.status(400).json({ error: error.message || 'That move is not legal.' }); }
+      const nextState = { ...transition.state, lastMoveId: moveId };
+      const winner = transition.winner;
+      if (winner) {
+        const metadata = { matchId: match.id, gameMode: match.game_mode };
+        if (winner === 'p2') {
+          await creditPlatformCoinsInTransaction(client, userId, Number(match.stake) * 2, 'ai_match_payout', `coin-match:${match.id}:payout`, metadata);
+          await creditPlatformCoinsInTransaction(client, userId, COINS_PER_GAME_WIN, 'game_win', `match-win:${match.id}:${userId}`, metadata);
+        }
+        await awardReferralFirstGameInTransaction(client, userId, match.id);
+        await client.query(`UPDATE platform_coin_ai_matches SET state = $2::jsonb, status = 'SETTLED', winner = $3, updated_at = CURRENT_TIMESTAMP, settled_at = CURRENT_TIMESTAMP WHERE id = $1`, [match.id, JSON.stringify(nextState), winner]);
+      } else {
+        await client.query('UPDATE platform_coin_ai_matches SET state = $2::jsonb, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [match.id, JSON.stringify(nextState)]);
+      }
+      const account = await client.query('SELECT balance FROM platform_coin_accounts WHERE user_id = $1', [userId]);
+      await client.query('COMMIT');
+      return res.json({ matchId: match.id, state: nextState, status: winner ? 'SETTLED' : 'ACTIVE', winner, balance: Number(account.rows[0]?.balance || 0), stake: Number(match.stake) });
+    }
     if (Number(state.turnDeadlineAt) <= Date.now()) {
       await client.query(`UPDATE platform_coin_ai_matches SET status = 'SETTLED', winner = 'p1', updated_at = CURRENT_TIMESTAMP, settled_at = CURRENT_TIMESTAMP WHERE id = $1`, [match.id]);
       const account = await client.query('SELECT balance FROM platform_coin_accounts WHERE user_id = $1', [userId]);

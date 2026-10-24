@@ -46,6 +46,8 @@ export const ArenaScreen: React.FC = () => {
   const [rulesMode, setRulesMode] = useState<GameMode>('draughts');
   const [preselectedGame, setPreselectedGame] = useState<GameMode>('whot');
   const [activeHoverDay, setActiveHoverDay] = useState<number | null>(null);
+  const [demoModeByGame, setDemoModeByGame] = useState<Partial<Record<GameMode, boolean>>>({});
+  const [coinStakeByGame, setCoinStakeByGame] = useState<Partial<Record<GameMode, number>>>({});
 
   // Escrow Reference Verification States
   const [verifyInput, setVerifyInput] = useState('');
@@ -521,8 +523,8 @@ export const ArenaScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* Responsive Grid for Battleground Cards: 1 col on mobile, 2 on tablet, 4 on desktop */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Responsive Grid for Battleground Cards: 1 col on mobile, 2 on tablet, 5 on desktop */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {battlegrounds.map((game, idx) => {
             const Icon = game.icon;
             return (
@@ -586,67 +588,71 @@ export const ArenaScreen: React.FC = () => {
 
                 {/* Quick Stake Launcher */}
                 <div className="pt-3 border-t border-white/5 space-y-2">
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold">
-                    <span>Quick Preset:</span>
-                    <span>Min ₦{game.minStake.toLocaleString()}</span>
-                  </div>
-
-                  <div className="flex gap-1.5">
-                    {[1000, 2500, 5000].map((stk) => (
-                      <motion.button
-                        key={stk}
-                        whileHover={{ scale: 1.08 }}
-                        whileTap={{ scale: 0.92 }}
-                        transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleLaunchGame(game.id, stk);
-                        }}
-                        className="flex-1 py-1.5 px-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-[10px] font-bold text-slate-300 hover:text-amber-400 border border-white/10 transition-colors cursor-pointer text-center"
+                  <div className="flex rounded-xl bg-slate-950/80 p-1 border border-white/10">
+                    {([false, true] as const).map((isDemo) => (
+                      <button
+                        key={String(isDemo)}
+                        onClick={(e) => { e.stopPropagation(); setDemoModeByGame((prev) => ({ ...prev, [game.id]: isDemo })); }}
+                        className={`flex-1 rounded-lg py-1.5 text-[10px] font-black transition-colors ${Boolean(demoModeByGame[game.id]) === isDemo ? (isDemo ? 'bg-cyan-400/15 text-cyan-200' : 'bg-amber-400/15 text-amber-200') : 'text-slate-500'}`}
                       >
-                        ₦{stk >= 1000 ? `${stk / 1000}k` : stk}
-                      </motion.button>
+                        {isDemo ? 'Demo · Tete Coins' : 'Cash match'}
+                      </button>
                     ))}
                   </div>
 
-                  {game.id === 'bead16' && (
+                  {demoModeByGame[game.id] ? (
                     <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-2">
                       <div className="mb-1.5 flex items-center justify-between text-[10px] font-semibold text-cyan-200">
-                        <span>Play Odogwuking for Tete Coins</span>
-                        <span>Balance: {user.coinBalance || 0}</span>
+                        <span>Vs Odogwuking · coin escrow</span>
+                        <span>Balance {user.coinBalance || 0} ◉</span>
                       </div>
                       <div className="flex gap-1.5">
                         {[100, 250, 500].map((coinStake) => (
                           <motion.button
                             key={coinStake}
                             whileTap={{ scale: 0.94 }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void startCoinAiMatch(coinStake);
-                            }}
-                            disabled={(user.coinBalance || 0) < coinStake}
-                            className="flex-1 rounded-lg border border-cyan-300/20 bg-cyan-950/70 py-1.5 text-[10px] font-bold text-cyan-200 transition-colors hover:bg-cyan-800/70 disabled:cursor-not-allowed disabled:opacity-40"
+                            onClick={(e) => { e.stopPropagation(); setCoinStakeByGame((prev) => ({ ...prev, [game.id]: coinStake })); }}
+                            className={`flex-1 rounded-lg border py-1.5 text-[10px] font-bold transition-colors ${ (coinStakeByGame[game.id] || 100) === coinStake ? 'border-cyan-300/60 bg-cyan-800/70 text-white' : 'border-cyan-300/20 bg-cyan-950/70 text-cyan-200 hover:bg-cyan-800/70'}`}
                           >
-                            ◉ {coinStake}
+                            {coinStake} ◉
                           </motion.button>
                         ))}
                       </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); void startCoinAiMatch(coinStakeByGame[game.id] || 100, game.id); }}
+                        disabled={(user.coinBalance || 0) < (coinStakeByGame[game.id] || 100)}
+                        className="mt-2 w-full rounded-lg bg-cyan-400/15 py-2 text-[11px] font-black text-cyan-100 hover:bg-cyan-400/25 disabled:cursor-not-allowed disabled:opacity-40"
+                      >Play Odogwuking for Tete Coins</button>
                     </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold">
+                        <span>Quick Stake:</span>
+                        <span>Min ₦{game.minStake.toLocaleString()}</span>
+                      </div>
+                      <div className="flex gap-1.5">
+                        {[1000, 2500, 5000].map((stk) => (
+                          <motion.button
+                            key={stk}
+                            whileHover={{ scale: 1.08 }}
+                            whileTap={{ scale: 0.92 }}
+                            transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                            onClick={(e) => { e.stopPropagation(); handleLaunchGame(game.id, stk); }}
+                            className="flex-1 py-1.5 px-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-[10px] font-bold text-slate-300 hover:text-amber-400 border border-white/10 transition-colors cursor-pointer text-center"
+                          >₦{stk / 1000}k</motion.button>
+                        ))}
+                      </div>
+                      <motion.button
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.96 }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                        onClick={(e) => { e.stopPropagation(); handleOpenCustomCreate(game.id); }}
+                        className="w-full py-2 px-3 rounded-xl bg-amber-500 hover:brightness-110 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
+                      >
+                        <span>Stake Now</span><ArrowUpRight className="w-3.5 h-3.5" />
+                      </motion.button>
+                    </>
                   )}
-
-                  <motion.button
-                    whileHover={{ scale: 1.03 }}
-                    whileTap={{ scale: 0.96 }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleOpenCustomCreate(game.id);
-                    }}
-                    className="w-full py-2 px-3 rounded-xl bg-amber-500 hover:brightness-110 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
-                  >
-                    <span>Stake Now</span>
-                    <ArrowUpRight className="w-3.5 h-3.5" />
-                  </motion.button>
                 </div>
               </motion.div>
             );

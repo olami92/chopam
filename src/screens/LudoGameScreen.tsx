@@ -35,7 +35,7 @@ import { sound } from '../services/audio';
 import { telegram } from '../services/telegram';
 
 export const LudoGameScreen: React.FC = () => {
-  const { activeMatch, settleMatch, cancelMatch, startMatch } = useGame();
+  const { activeMatch, settleMatch, completeCoinAiMatch, cancelMatch, startMatch, startCoinAiMatch } = useGame();
   const isBlitz = activeMatch?.gameMode === 'ludo_blitz';
   const [matchResult, setMatchResult] = useState<'player' | 'opponent' | null>(null);
   const [showRulesModal, setShowRulesModal] = useState(false);
@@ -43,7 +43,8 @@ export const LudoGameScreen: React.FC = () => {
 
   const handleGameOver = (winner: 'player' | 'opponent') => {
     setMatchResult(winner);
-    settleMatch(winner);
+    if (activeMatch?.coinMatchId) completeCoinAiMatch(winner);
+    else settleMatch(winner);
   };
 
   const {
@@ -76,7 +77,11 @@ export const LudoGameScreen: React.FC = () => {
   const handleRematch = () => {
     if (!activeMatch) return;
     setMatchResult(null);
-    startMatch(activeMatch.gameMode, activeMatch.stake, activeMatch.isPrivate, activeMatch.roomCode);
+    if (activeMatch.coinMatchId) {
+      void startCoinAiMatch(activeMatch.stake, activeMatch.gameMode);
+    } else {
+      startMatch(activeMatch.gameMode, activeMatch.stake, activeMatch.isPrivate, activeMatch.roomCode);
+    }
     restartGame();
   };
 

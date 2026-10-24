@@ -18,6 +18,7 @@ import {
   CreditCard,
   ChevronDown,
   HelpCircle,
+  Swords,
 } from 'lucide-react';
 import { sound } from '../services/audio';
 
@@ -222,7 +223,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onOpenAdmi
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {/* Card 1: Naija Whot */}
           <div className="bg-slate-900/60 backdrop-blur-md border border-white/10 hover:border-indigo-500/50 rounded-3xl p-5 flex flex-col justify-between transition-all group">
             <div>
@@ -241,17 +242,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onOpenAdmi
               </p>
               <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-[11px] text-slate-400">
                 <span>Min Stake: <strong className="text-white">₦1,000</strong></span>
-                <span className="text-emerald-400 font-bold">48 Active Tables</span>
+                <span className="text-emerald-400 font-bold">48 Tables</span>
               </div>
             </div>
 
-            <button
-              onClick={() => onOpenAuth('register')}
-              className="mt-5 w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <span>Play Whot Match</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="mt-4 pt-2 border-t border-white/5 space-y-2">
+              <button
+                onClick={() => onOpenAuth('register')}
+                className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <span>Play Whot Match</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={handleStartDemo}
+                className="w-full py-1.5 rounded-xl bg-cyan-400/10 hover:bg-cyan-400/20 text-cyan-300 border border-cyan-400/20 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Zap className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Demo · Tete Coins</span>
+              </button>
+            </div>
           </div>
 
           {/* Card 2: Classic Ludo */}
@@ -272,17 +282,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onOpenAdmi
               </p>
               <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-[11px] text-slate-400">
                 <span>Min Stake: <strong className="text-white">₦1,000</strong></span>
-                <span className="text-emerald-400 font-bold">34 Active Tables</span>
+                <span className="text-emerald-400 font-bold">34 Tables</span>
               </div>
             </div>
 
-            <button
-              onClick={() => onOpenAuth('register')}
-              className="mt-5 w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <span>Play Classic Ludo</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="mt-4 pt-2 border-t border-white/5 space-y-2">
+              <button
+                onClick={() => onOpenAuth('register')}
+                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <span>Play Classic Ludo</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={handleStartDemo}
+                className="w-full py-1.5 rounded-xl bg-cyan-400/10 hover:bg-cyan-400/20 text-cyan-300 border border-cyan-400/20 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Zap className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Demo · Tete Coins</span>
+              </button>
+            </div>
           </div>
 
           {/* Card 3: Ludo Blitz */}
@@ -303,17 +322,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onOpenAdmi
               </p>
               <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-[11px] text-slate-400">
                 <span>Min Stake: <strong className="text-white">₦2,500</strong></span>
-                <span className="text-emerald-400 font-bold">29 Active Tables</span>
+                <span className="text-emerald-400 font-bold">29 Tables</span>
               </div>
             </div>
 
-            <button
-              onClick={() => onOpenAuth('register')}
-              className="mt-5 w-full py-2.5 rounded-xl bg-amber-500 hover:brightness-110 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <span>Play Ludo Blitz</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="mt-4 pt-2 border-t border-white/5 space-y-2">
+              <button
+                onClick={() => onOpenAuth('register')}
+                className="w-full py-2.5 rounded-xl bg-amber-500 hover:brightness-110 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <span>Play Ludo Blitz</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={handleStartDemo}
+                className="w-full py-1.5 rounded-xl bg-cyan-400/10 hover:bg-cyan-400/20 text-cyan-300 border border-cyan-400/20 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Zap className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Demo · Tete Coins</span>
+              </button>
+            </div>
           </div>
 
           {/* Card 4: Draughts Duel */}
@@ -334,17 +362,65 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onOpenAdmi
               </p>
               <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-[11px] text-slate-400">
                 <span>Min Stake: <strong className="text-white">₦1,500</strong></span>
-                <span className="text-emerald-400 font-bold">22 Active Tables</span>
+                <span className="text-emerald-400 font-bold">22 Tables</span>
               </div>
             </div>
 
-            <button
-              onClick={() => onOpenAuth('register')}
-              className="mt-5 w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <span>Play Draughts</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="mt-4 pt-2 border-t border-white/5 space-y-2">
+              <button
+                onClick={() => onOpenAuth('register')}
+                className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <span>Play Draughts</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={handleStartDemo}
+                className="w-full py-1.5 rounded-xl bg-cyan-400/10 hover:bg-cyan-400/20 text-cyan-300 border border-cyan-400/20 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Zap className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Demo · Tete Coins</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Card 5: Bead 16 Tactics */}
+          <div className="bg-slate-900/60 backdrop-blur-md border border-white/10 hover:border-cyan-500/50 rounded-3xl p-5 flex flex-col justify-between transition-all group">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <Swords className="w-6 h-6" />
+                </div>
+                <span className="text-[10px] font-bold text-cyan-300 bg-cyan-500/20 border border-cyan-500/30 px-2.5 py-0.5 rounded-full">
+                  16-Bead Duel
+                </span>
+              </div>
+              <h3 className="text-lg font-black text-white">Bead 16 Tactics</h3>
+              <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                Traditional 37-node Sholo Guti board with 16 vs 16 bead captures, diagonal lines, and chain multi-jumps.
+              </p>
+              <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-[11px] text-slate-400">
+                <span>Min Stake: <strong className="text-white">₦500</strong></span>
+                <span className="text-cyan-400 font-bold">18 Tables</span>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-2 border-t border-white/5 space-y-2">
+              <button
+                onClick={() => onOpenAuth('register')}
+                className="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <span>Play Bead 16</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={handleStartDemo}
+                className="w-full py-1.5 rounded-xl bg-cyan-400/10 hover:bg-cyan-400/20 text-cyan-300 border border-cyan-400/20 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Zap className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Demo · Tete Coins</span>
+              </button>
+            </div>
           </div>
         </div>
       </section>

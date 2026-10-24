@@ -58,7 +58,7 @@ export function useLudoGame(
   isBlitz: boolean,
   onGameOver: (winner: 'player' | 'opponent') => void
 ) {
-  const { recordReplayStep, user, activeMatch, sendP2pStateUpdate } = useGame();
+  const { recordReplayStep, user, activeMatch, sendP2pStateUpdate, submitCoinAiAction, timeoutCoinAiMatch } = useGame();
   // Player = Red (Starts track at index 0)
   // Opponent = Yellow (Starts track at index 26)
   const [playerTokens, setPlayerTokens] = useState<LudoToken[]>([
@@ -114,6 +114,9 @@ export function useLudoGame(
         if (s.opponentTokens) setOpponentTokens(s.opponentTokens);
         if (s.turn) setTurn(s.turn);
         if (s.diceValue !== undefined) setDiceValue(s.diceValue);
+        if (s.blitzCards) setBlitzCards(s.blitzCards);
+        if (s.opponentBlitzCards) setOpponentBlitzCards(s.opponentBlitzCards);
+        setSelectedCardId(null);
         if (s.gameMessage) setGameMessage(s.gameMessage);
         if (s.lastAction) setLastAction(s.lastAction);
 
@@ -256,6 +259,7 @@ export function useLudoGame(
   // Handle player turn timeout: player loses turn
   useEffect(() => {
     if (isMyTurn && turnTimeLeft === 0) {
+      if (activeMatch?.coinMatchId) { void timeoutCoinAiMatch(); return; }
       sound.playTimeout();
       telegram.triggerHaptic('warning');
       setSelectedCardId(null);
@@ -292,6 +296,10 @@ export function useLudoGame(
     if (!hasAnyValidMove) {
       autoPassRef.current = true;
       setSelectedCardId(null);
+      if (activeMatch?.coinMatchId) {
+        void submitCoinAiAction({ type: 'ludo_blitz_pass' }).finally(() => { autoPassRef.current = false; });
+        return;
+      }
       sound.playTimeout();
       telegram.triggerHaptic('warning');
 
@@ -330,6 +338,8 @@ export function useLudoGame(
     playerTokens,
     opponentTokens,
     sendP2pStateUpdate,
+    activeMatch?.coinMatchId,
+    submitCoinAiAction,
   ]);
 
   // Reset autoPassRef when turn leaves player
@@ -357,6 +367,7 @@ function getCryptographicDiceRoll(): number {
   // Roll dice for Classic mode
   const rollDice = useCallback(() => {
     if (isBlitz || !isMyTurn || isRolling || diceValue !== null) return;
+    if (activeMatch?.coinMatchId) { void submitCoinAiAction({ type: 'ludo_roll' }); return; }
 
     setIsRolling(true);
     sound.playDiceRoll();
@@ -419,11 +430,18 @@ function getCryptographicDiceRoll(): number {
         }
       }
     }, 60);
-  }, [isBlitz, isMyTurn, isRolling, diceValue, myTokens, canTokenMove, user, recordReplayStep, playerTokens, opponentTokens, isHost, isP2P, sendP2pStateUpdate, turn]);
+  }, [isBlitz, isMyTurn, isRolling, diceValue, myTokens, canTokenMove, user, recordReplayStep, playerTokens, opponentTokens, isHost, isP2P, sendP2pStateUpdate, turn, activeMatch?.coinMatchId, submitCoinAiAction]);
 
   // Move token
   const moveToken = useCallback(
     (token: LudoToken, moveValue: number) => {
+      if (activeMatch?.coinMatchId) {
+        if (isBlitz) {
+          const card = blitzCards.find((item) => item.id === selectedCardId);
+          if (card) void submitCoinAiAction({ type: 'ludo_blitz_move', tokenId: token.id, cardId: card.id });
+        } else void submitCoinAiAction({ type: 'ludo_move', tokenId: token.id });
+        return;
+      }
       const isPlayerMove = (isHost && token.color === 'red') || (!isHost && token.color === 'yellow');
       let nextStep = token.step;
 
@@ -616,6 +634,7 @@ function getCryptographicDiceRoll(): number {
       isP2P,
       sendP2pStateUpdate,
       turn,
+      submitCoinAiAction,
     ]
   );
 
