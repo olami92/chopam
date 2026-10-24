@@ -89,7 +89,7 @@ class EscrowEngine extends EventEmitter {
     activeEscrowLocked: 0,
     totalMatchesSettled: 0,
     totalRefundsIssued: 0,
-    totalDeposits: 279000,
+    totalDeposits: 0,
     totalWithdrawals: 0,
   };
 
@@ -1059,6 +1059,8 @@ class EscrowEngine extends EventEmitter {
     for (const [keyId, user] of this.userBalances.entries()) {
       if (this.deletedUsers.has(user.userId) || this.deletedUsers.has(keyId)) continue;
       const lowerName = user.username.toLowerCase();
+      // The AI opponent is a game character, not a registered platform user.
+      if (user.userId.startsWith('bot_') || lowerName === 'odogwuking' || lowerName === 'odogwu_king') continue;
       if (seenUsernames.has(lowerName)) continue;
       seenUsernames.add(lowerName);
 

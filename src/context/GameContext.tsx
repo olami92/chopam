@@ -49,6 +49,18 @@ const getEscrowStorageKey = (identifier?: string) => {
 };
 
 const getActiveMatchStorageKey = (identifier?: string) => `skillstake_active_match_${String(identifier || 'guest').trim().toLowerCase().replace(/^@/, '')}`;
+const DEMO_ESCROW_TRANSACTION_IDS = new Set(['tx_9921', 'tx_9920', 'tx_9919', 'tx_9918']);
+
+const restoreEscrowHistory = (raw: string | null): EscrowTransaction[] => {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((transaction) => !DEMO_ESCROW_TRANSACTION_IDS.has(transaction?.id));
+  } catch {
+    return [];
+  }
+};
 
 const calculateDerivedWeeklyStats = (items: (DayPerformance | any)[]) => {
   const allMatches: number = items.reduce((acc, it) => acc + (it ? it.matches || 0 : 0), 0);
@@ -212,7 +224,7 @@ const INITIAL_NOTIFICATIONS: AppNotification[] = [
   },
 ];
 
-const INITIAL_ESCROW_HISTORY: EscrowTransaction[] = [
+const DEMO_ESCROW_HISTORY: EscrowTransaction[] = [
   {
     id: 'tx_9921',
     matchId: 'M-7712',
@@ -578,11 +590,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [escrowHistory, setEscrowHistory] = useState<EscrowTransaction[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_ESCROW);
-      if (saved) return JSON.parse(saved);
+      if (saved) return restoreEscrowHistory(saved);
     } catch {
       // fallback
     }
-    return INITIAL_ESCROW_HISTORY;
+    return [];
   });
 
   const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>(() => {
@@ -658,7 +670,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       // fallback
     }
-    return INITIAL_NOTIFICATIONS;
+    return [];
   });
 
   // Save notifications to local storage
@@ -1020,11 +1032,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setWeeklyPerformance(buildWeeklyData(EMPTY_WEEKLY_DAYS));
       }
 
-      if (savedEscrowRaw) {
-        setEscrowHistory(JSON.parse(savedEscrowRaw));
-      } else {
-        setEscrowHistory([]);
-      }
+      setEscrowHistory(restoreEscrowHistory(savedEscrowRaw));
 
       setNotifications(WELCOME_NOTIFICATIONS);
       setOpenTables([]);
@@ -1171,11 +1179,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setWeeklyPerformance(buildWeeklyData(EMPTY_WEEKLY_DAYS));
         }
 
-        if (savedEscrowRaw) {
-          setEscrowHistory(JSON.parse(savedEscrowRaw));
-        } else {
-          setEscrowHistory([]);
-        }
+        setEscrowHistory(restoreEscrowHistory(savedEscrowRaw));
 
         setNotifications(WELCOME_NOTIFICATIONS);
         setOpenTables([]);
@@ -1229,7 +1233,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     localStorage.removeItem(STORAGE_KEY_SESSION);
     setUser(DEMO_USER);
-    setEscrowHistory(INITIAL_ESCROW_HISTORY);
+    setEscrowHistory(DEMO_ESCROW_HISTORY);
     setNotifications(INITIAL_NOTIFICATIONS);
     setWeeklyPerformance(buildWeeklyData(DEMO_WEEKLY_DAYS));
     setOpenTables(DEMO_OPEN_TABLES);

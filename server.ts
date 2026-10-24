@@ -1278,31 +1278,40 @@ app.post('/api/admin/treasury', async (req, res) => {
 
 app.get('/api/admin/game-analytics', (_req, res) => {
   const matches = escrowEngine.getAllMatches();
-  const modes: { mode: string; title: string; defaultStake: string }[] = [
-    { mode: 'WHOT', title: 'Naija Whot! Pro', defaultStake: '₦5,000 ($3.33 USDT)' },
-    { mode: 'LUDO', title: 'Ludo Classic Master', defaultStake: '₦3,500 ($2.33 USDT)' },
-    { mode: 'DRAUGHTS', title: 'International Draughts', defaultStake: '₦5,000 ($3.33 USDT)' },
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+  const modes: { mode: string; title: string }[] = [
+    { mode: 'WHOT', title: 'Naija Whot! Pro' },
+    { mode: 'LUDO', title: 'Ludo Classic Master' },
+    { mode: 'DRAUGHTS', title: 'International Draughts' },
   ];
 
   const analytics = modes.map((m) => {
     const modeMatches = matches.filter((x) => x.gameType === m.mode);
     const activeRooms = modeMatches.filter((x) => x.status === 'ACTIVE' || x.status === 'INITIALIZING').length;
-    const settledMatches = modeMatches.filter((x) => x.status === 'SETTLED');
-    const totalMatchesToday = modeMatches.length;
-    const volumeNgn = modeMatches.reduce((acc, curr) => acc + curr.grossPot, 0);
-    const houseFeeEarnedNgn = modeMatches.reduce((acc, curr) => acc + curr.houseFeeAmount, 0);
+    const todayMatches = modeMatches.filter((x) => x.createdAt >= dayStart.getTime());
+    const settledMatches = todayMatches.filter((x) => x.status === 'SETTLED' && x.settledAt);
+    const stakeCounts = new Map<number, number>();
+    todayMatches.forEach((match) => stakeCounts.set(match.stakePerPlayer, (stakeCounts.get(match.stakePerPlayer) || 0) + 1));
+    const popularStake = [...stakeCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    const averageDurationMs = settledMatches.length
+      ? settledMatches.reduce((sum, match) => sum + (Number(match.settledAt) - match.createdAt), 0) / settledMatches.length
+      : 0;
+    const averageDurationSeconds = Math.round(averageDurationMs / 1000);
+    const volumeNgn = todayMatches.reduce((acc, curr) => acc + curr.grossPot, 0);
+    const houseFeeEarnedNgn = todayMatches.reduce((acc, curr) => acc + curr.houseFeeAmount, 0);
 
     return {
       gameMode: m.mode.toLowerCase(),
       title: m.title,
       activeRooms,
-      liveSpectators: activeRooms * 4,
-      totalMatchesToday,
+      liveSpectators: 0,
+      totalMatchesToday: todayMatches.length,
       volumeNgn,
       houseFeeEarnedNgn,
-      avgMatchDuration: settledMatches.length > 0 ? '3m 45s' : '0m 00s',
-      disputeRate: '0.0%',
-      popularStake: m.defaultStake,
+      avgMatchDuration: settledMatches.length ? `${Math.floor(averageDurationSeconds / 60)}m ${String(averageDurationSeconds % 60).padStart(2, '0')}s` : '—',
+      disputeRate: '—',
+      popularStake: popularStake === undefined ? '—' : `₦${popularStake.toLocaleString('en-NG')}`,
     };
   });
 
@@ -2439,36 +2448,6 @@ app.post('/api/escrow/reserve-match', async (req, res) => {
 
 // Shared Room Registry in memory
 const sharedRoomsStore = new Map<string, any>();
-
-// Seed active community tables across game modes
-function seedInitialRooms() {
-  const seedRooms = [
-    { roomCode: 'WHOT-7821', gameMode: 'whot', stake: 1000, pot: 1900, hostUsername: 'Tunde_Viper', status: 'WAITING_FOR_OPPONENT', createdAt: Date.now() - 120000 },
-    { roomCode: 'WHOT-4402', gameMode: 'whot', stake: 2500, pot: 4750, hostUsername: 'Femi_Master', status: 'IN_PROGRESS', joinedPlayer: { username: 'Emeka_King' }, createdAt: Date.now() - 300000 },
-    { roomCode: 'WHOT-9031', gameMode: 'whot', stake: 5000, pot: 9500, hostUsername: 'Chidi_Ace', status: 'WAITING_FOR_OPPONENT', createdAt: Date.now() - 45000 },
-    { roomCode: 'WHOT-1192', gameMode: 'whot', stake: 500, pot: 950, hostUsername: 'Bisi_Pro', status: 'WAITING_FOR_OPPONENT', createdAt: Date.now() - 60000 },
-    { roomCode: 'WHOT-6638', gameMode: 'whot', stake: 10000, pot: 19000, hostUsername: 'Ola_Highroller', status: 'IN_PROGRESS', joinedPlayer: { username: 'Kelechi_X' }, createdAt: Date.now() - 180000 },
-
-    { roomCode: 'LUDO-3391', gameMode: 'ludo_classic', stake: 1000, pot: 1900, hostUsername: 'Nkechi_Dice', status: 'WAITING_FOR_OPPONENT', createdAt: Date.now() - 90000 },
-    { roomCode: 'LUDO-8820', gameMode: 'ludo_classic', stake: 2500, pot: 4750, hostUsername: 'Tayo_Board', status: 'IN_PROGRESS', joinedPlayer: { username: 'Segun_Win' }, createdAt: Date.now() - 240000 },
-    { roomCode: 'LUDO-5104', gameMode: 'ludo_classic', stake: 5000, pot: 9500, hostUsername: 'Yinka_Star', status: 'WAITING_FOR_OPPONENT', createdAt: Date.now() - 15000 },
-
-    { roomCode: 'BLITZ-1049', gameMode: 'ludo_blitz', stake: 2500, pot: 4750, hostUsername: 'Kunle_Cards', status: 'WAITING_FOR_OPPONENT', createdAt: Date.now() - 75000 },
-    { roomCode: 'BLITZ-7732', gameMode: 'ludo_blitz', stake: 5000, pot: 9500, hostUsername: 'Bola_Fast', status: 'IN_PROGRESS', joinedPlayer: { username: 'Dayo_Tactics' }, createdAt: Date.now() - 360000 },
-
-    { roomCode: 'DRGT-5591', gameMode: 'draughts', stake: 1500, pot: 2850, hostUsername: 'Ibrahim_Grandmaster', status: 'WAITING_FOR_OPPONENT', createdAt: Date.now() - 110000 },
-    { roomCode: 'DRGT-2018', gameMode: 'draughts', stake: 5000, pot: 9500, hostUsername: 'Obinna_EatUp', status: 'IN_PROGRESS', joinedPlayer: { username: 'Usman_King' }, createdAt: Date.now() - 200000 },
-
-    { roomCode: 'BD16-8812', gameMode: 'bead16', stake: 1000, pot: 1900, hostUsername: 'Sholo_Tactician', status: 'WAITING_FOR_OPPONENT', createdAt: Date.now() - 65000 },
-    { roomCode: 'BD16-4409', gameMode: 'bead16', stake: 2500, pot: 4750, hostUsername: 'Bead_Champ', status: 'IN_PROGRESS', joinedPlayer: { username: 'Guti_Pro' }, createdAt: Date.now() - 140000 },
-  ];
-
-  seedRooms.forEach((r) => {
-    sharedRoomsStore.set(r.roomCode, r);
-    p2pRoomMeta.set(r.roomCode, r);
-  });
-}
-seedInitialRooms();
 
 app.post('/api/rooms', (req, res) => {
   const table = req.body;

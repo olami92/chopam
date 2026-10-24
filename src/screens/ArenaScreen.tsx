@@ -190,10 +190,11 @@ export const ArenaScreen: React.FC = () => {
     .sort((a, b) => b.winRate - a.winRate)[0];
 
   const [liveTableCounts, setLiveTableCounts] = useState<Record<string, number>>({
-    whot: 5,
-    ludo_classic: 3,
-    ludo_blitz: 2,
-    draughts: 2,
+    whot: 0,
+    ludo_classic: 0,
+    ludo_blitz: 0,
+    draughts: 0,
+    bead16: 0,
   });
 
   useEffect(() => {
@@ -282,7 +283,7 @@ export const ArenaScreen: React.FC = () => {
       description: 'Traditional 37-node Sholo Guti board with 16 vs 16 bead captures & multi-jump chains.',
       icon: Swords,
       minStake: 500,
-      activeTables: liveTableCounts.bead16 ?? 3,
+      activeTables: liveTableCounts.bead16 ?? 0,
     },
   ];
 
