@@ -2100,6 +2100,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .catch((err) => console.warn('Backend refund error:', err));
     }
     setActiveMatch(null);
+    setActiveTab('arena');
     telegram.triggerHaptic('light');
   }, [activeMatch, user.id, user.username]);
 
