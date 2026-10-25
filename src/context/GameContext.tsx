@@ -13,6 +13,7 @@ import {
   DayPerformance,
   TurnMode,
   TURN_MODE_SECONDS,
+  normalizeTurnMode,
 } from '../types';
 import { MatchReplayData, ReplayStep } from '../types/replay';
 import { getReplayById, saveReplay } from '../services/replayService';
@@ -395,7 +396,7 @@ interface GameContextType {
   withdraw: (amount: number, bank: string, accountNumber: string, bankDetails?: { bankName?: string; accountName?: string }) => boolean;
   createTable: (gameMode: GameMode, stake: number, customRoomCode?: string, turnMode?: TurnMode) => string;
   joinTable: (table: OpenTable) => boolean;
-  joinByRoomCode: (roomCode: string) => Promise<boolean> | boolean;
+  joinByRoomCode: (roomCode: string, selectedTurnMode?: TurnMode) => Promise<boolean> | boolean;
   spectatingMatchId: string | null;
   setSpectatingMatchId: (id: string | null) => void;
   isTelegram: boolean;
@@ -1396,7 +1397,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isVsAi?: boolean,
       hostUsernameParam?: string,
       initialStatus: MatchStatus = 'locked_escrow',
-      turnMode: TurnMode = gameMode === 'ludo_blitz' ? 'fast_blitz' : 'casual'
+      turnMode: TurnMode = 'live'
     ): boolean => {
       // Strict client-side balance validation check
       if (user.availableBalance < stake) {
@@ -2232,7 +2233,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [user.availableBalance, user.id, user.username, user.displayName, addNotification]
   );
 
-  const createTable = useCallback((gameMode: GameMode, stake: number, customRoomCode?: string, turnMode: TurnMode = gameMode === 'ludo_blitz' ? 'fast_blitz' : 'casual'): string => {
+  const createTable = useCallback((gameMode: GameMode, stake: number, customRoomCode?: string, turnMode: TurnMode = 'live'): string => {
     const roomCode = customRoomCode || `TG-${Math.floor(1000 + Math.random() * 9000)}`;
     const newTable: OpenTable = {
       id: `tbl_${Date.now()}`,
@@ -2295,7 +2296,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 
   const joinByRoomCode = useCallback(
-    async (roomCode: string): Promise<boolean> => {
+    async (roomCode: string, selectedTurnMode?: TurnMode): Promise<boolean> => {
       const cleanCode = roomCode.trim().toUpperCase();
 
       // 1. Search in-memory state or localStorage
@@ -2328,7 +2329,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               gameMode: remoteRoom.gameMode || 'whot',
               joinedPlayer: remoteRoom.joinedPlayer || undefined,
               hostUserId: remoteRoom.hostUserId || undefined,
-              turnMode: remoteRoom.turnMode || (remoteRoom.gameMode === 'ludo_blitz' ? 'fast_blitz' : 'casual'),
+              turnMode: normalizeTurnMode(remoteRoom.turnMode),
               stake: remoteRoom.stake || 2500,
               pot: remoteRoom.pot || Math.round((remoteRoom.stake || 2500) * 1.9),
               isPrivate: true,
@@ -2355,7 +2356,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             winRate: existing.hostWinRate || 66,
           };
           const gameMode = existing.gameMode || 'whot';
-          const turnMode = existing.turnMode || (gameMode === 'ludo_blitz' ? 'fast_blitz' : 'casual');
+          const turnMode = normalizeTurnMode(existing.turnMode);
+          if (selectedTurnMode && selectedTurnMode !== turnMode) {
+            addNotification({ title: 'Match pace mismatch', message: `This room is ${turnMode === 'live' ? 'Live (60 seconds per turn)' : 'Async (1 hour per turn)'}. Choose the same pace to join.`, type: 'system' });
+            return false;
+          }
           const stake = Number(existing.stake) || 2500;
           setActiveMatch({
             id: `M-${cleanCode.replace(/[^A-Z0-9_-]/g, '').slice(0, 40)}`,
@@ -2385,7 +2390,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,
         winRate: user.winRate,
-      }).catch(() => {});
+      }, selectedTurnMode).catch(() => {});
 
       if (existing) {
         if (
@@ -2423,7 +2428,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         hostAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
         hostWinRate: 66.0,
         gameMode: inferredGameMode,
-        turnMode: inferredGameMode === 'ludo_blitz' ? 'fast_blitz' : 'casual',
+        turnMode: selectedTurnMode || 'live',
         stake: 2500,
         pot: 4750,
         isPrivate: true,
@@ -2431,7 +2436,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       return joinTable(fallbackTable);
     },
-    [openTables, joinTable, user]
+    [openTables, joinTable, user, addNotification]
   );
 
   // Periodically poll backend for joining player updates if activeMatch is waiting for challenger
@@ -2542,7 +2547,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           stake: p2pStake,
           pot: p2pPot,
           gameMode: p2pGameMode,
-          turnMode: activeMatch?.turnMode || 'casual',
+          turnMode: activeMatch?.turnMode || 'live',
         })
       );
     };
@@ -2604,6 +2609,16 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               },
             };
           });
+        }
+        if (msg.type === 'p2p_player_disconnected' && msg.roomCode === p2pRoomCode) {
+          addNotification({
+            title: 'Opponent reconnecting',
+            message: `@${msg.disconnectedUsername || 'Opponent'} disconnected. They have ${msg.graceSeconds || 30} seconds to reconnect.`,
+            type: 'match',
+          });
+        }
+        if (msg.type === 'p2p_player_reconnected' && msg.roomCode === p2pRoomCode) {
+          addNotification({ title: 'Opponent reconnected', message: `@${msg.username || 'Opponent'} is back in the match.`, type: 'match' });
         }
         if (msg.type === 'p2p_player_left' && msg.roomCode === p2pRoomCode) {
           sound.playWin();
@@ -2668,7 +2683,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const sendP2pStateUpdate = useCallback(
     (stateData: any) => {
       if (p2pSocketRef.current?.readyState === WebSocket.OPEN && activeMatch?.roomCode) {
-        const turnDeadlineAt = Date.now() + TURN_MODE_SECONDS[activeMatch.turnMode || 'casual'] * 1000;
+        const turnDeadlineAt = Date.now() + TURN_MODE_SECONDS[activeMatch.turnMode || 'live'] * 1000;
         setActiveMatch((prev) => prev ? { ...prev, turnDeadlineAt } : prev);
         p2pSocketRef.current.send(
           JSON.stringify({

@@ -1,6 +1,11 @@
 export type GameMode = 'whot' | 'ludo_classic' | 'ludo_blitz' | 'draughts' | 'bead16';
-export type TurnMode = 'casual' | 'fast_blitz';
-export const TURN_MODE_SECONDS: Record<TurnMode, number> = { casual: 60 * 60, fast_blitz: 45 };
+export type TurnMode = 'live' | 'async';
+export const TURN_MODE_SECONDS: Record<TurnMode, number> = { live: 60, async: 60 * 60 };
+export const normalizeTurnMode = (mode: unknown, fallback: TurnMode = 'live'): TurnMode => {
+  if (mode === 'live' || mode === 'fast_blitz') return 'live';
+  if (mode === 'async' || mode === 'casual') return 'async';
+  return fallback;
+};
 
 export type TabType = 'arena' | 'lobby' | 'wallet' | 'analytics';
 

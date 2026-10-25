@@ -162,7 +162,7 @@ export function useLudoGame(
   const [opponentPlayedCard, setOpponentPlayedCard] = useState<LudoCard | null>(null);
 
   // Turn Countdown Timer: 15s for Blitz, 20s for Classic
-  const maxTurnTime = TURN_MODE_SECONDS[activeMatch?.turnMode || (isBlitz ? 'fast_blitz' : 'casual')];
+  const maxTurnTime = TURN_MODE_SECONDS[activeMatch?.turnMode || 'live'];
   const [turnTimeLeft, setTurnTimeLeft] = useState<number>(maxTurnTime);
 
   const aiThinkingRef = useRef(false);

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGame } from '../context/GameContext';
-import { GameMode, OpenTable, LiveSpectateMatch } from '../types';
+import { GameMode, OpenTable, LiveSpectateMatch, normalizeTurnMode } from '../types';
 import {
   Swords,
   Plus,
@@ -25,11 +25,12 @@ import { useSpectatorSocket } from '../hooks/useSpectatorSocket';
 import { sound } from '../services/audio';
 
 export const LobbyScreen: React.FC = () => {
-  const { openTables, joinTable, user, spectatingMatchId, setSpectatingMatchId } = useGame();
+  const { openTables, user, spectatingMatchId, setSpectatingMatchId } = useGame();
   const [lobbyView, setLobbyView] = useState<'play' | 'spectate'>('play');
   const [selectedFilter, setSelectedFilter] = useState<'all' | GameMode>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
+  const [selectedJoinRoom, setSelectedJoinRoom] = useState<OpenTable | undefined>();
   const [copiedTableCodeId, setCopiedTableCodeId] = useState<string | null>(null);
 
   const handleCopyTableCode = (table: OpenTable, e: React.MouseEvent) => {
@@ -92,7 +93,8 @@ export const LobbyScreen: React.FC = () => {
 
   const handleJoin = (table: OpenTable) => {
     sound.playClick();
-    joinTable(table);
+    setSelectedJoinRoom(table);
+    setShowJoinModal(true);
   };
 
   const handleStartSpectating = (match: LiveSpectateMatch) => {
@@ -484,6 +486,9 @@ export const LobbyScreen: React.FC = () => {
                             )}
                           </button>
                         </div>
+                        <span className="mt-1 inline-flex rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2 py-0.5 text-[9px] font-semibold text-cyan-200">
+                          {normalizeTurnMode(table.turnMode) === 'async' ? 'Async · 1h turns' : 'Live · 60s turns'}
+                        </span>
                       </div>
                     </div>
 
@@ -536,7 +541,7 @@ export const LobbyScreen: React.FC = () => {
       )}
 
       {showCreateModal && <CreateRoomModal onClose={() => setShowCreateModal(false)} />}
-      {showJoinModal && <JoinRoomModal onClose={() => setShowJoinModal(false)} />}
+      {showJoinModal && <JoinRoomModal initialRoom={selectedJoinRoom} onClose={() => { setShowJoinModal(false); setSelectedJoinRoom(undefined); }} />}
     </div>
   );
 };

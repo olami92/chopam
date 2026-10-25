@@ -199,7 +199,7 @@ export function useWhotGame(onGameOver: (winner: 'player' | 'opponent') => void)
   const [aiActionNonce, setAiActionNonce] = useState<number>(0);
 
   // Turn Countdown Timer: 20s for Whot (Forfeit defeat at 4 timeouts)
-  const maxTurnTime = TURN_MODE_SECONDS[activeMatch?.turnMode || 'casual'];
+  const maxTurnTime = TURN_MODE_SECONDS[activeMatch?.turnMode || 'live'];
   const maxTimeouts = 4;
   const [turnTimeLeft, setTurnTimeLeft] = useState<number>(maxTurnTime);
   const [playerTimeoutCount, setPlayerTimeoutCount] = useState<number>(0);

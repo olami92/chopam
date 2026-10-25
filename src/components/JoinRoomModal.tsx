@@ -1,19 +1,37 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useGame } from '../context/GameContext';
+import { OpenTable, TurnMode, normalizeTurnMode } from '../types';
+import { EscrowApiService } from '../services/escrowService';
 import { X, KeyRound, ArrowRight, AlertCircle, Clipboard, Check } from 'lucide-react';
 import { sound } from '../services/audio';
 import { telegram } from '../services/telegram';
 
 interface JoinRoomModalProps {
   onClose: () => void;
+  initialRoom?: OpenTable;
 }
 
-export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({ onClose }) => {
+export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({ onClose, initialRoom }) => {
   const { joinByRoomCode } = useGame();
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(initialRoom?.roomCode || '');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [pasteStatus, setPasteStatus] = useState<string | null>(null);
+  const [selectedTurnMode, setSelectedTurnMode] = useState<TurnMode>(normalizeTurnMode(initialRoom?.turnMode));
+  const [roomTurnMode, setRoomTurnMode] = useState<TurnMode | null>(initialRoom ? normalizeTurnMode(initialRoom.turnMode) : null);
+  const [checkingRoom, setCheckingRoom] = useState(false);
+
+  useEffect(() => {
+    const clean = code.trim().toUpperCase();
+    if (clean.length < 5 || initialRoom?.roomCode.toUpperCase() === clean) return;
+    const timer = setTimeout(() => {
+      setCheckingRoom(true);
+      void EscrowApiService.fetchRoomByCode(clean).then((room) => {
+        setRoomTurnMode(room ? normalizeTurnMode(room.turnMode) : null);
+      }).finally(() => setCheckingRoom(false));
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [code, initialRoom]);
 
   const handlePasteFromClipboard = async () => {
     sound.playClick();
@@ -45,7 +63,20 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({ onClose }) => {
     sound.playClick();
     telegram.triggerHaptic('medium');
 
-    const success = await joinByRoomCode(clean);
+    let matchMode = roomTurnMode;
+    if (!matchMode) {
+      const room = await EscrowApiService.fetchRoomByCode(clean);
+      if (room) {
+        matchMode = normalizeTurnMode(room.turnMode);
+        setRoomTurnMode(matchMode);
+      }
+    }
+    if (matchMode && selectedTurnMode !== matchMode) {
+      setErrorMsg(`This room is ${matchMode === 'live' ? 'Live (60 seconds per turn)' : 'Async (1 hour per turn)'}. Select the same pace to join.`);
+      return;
+    }
+
+    const success = await joinByRoomCode(clean, selectedTurnMode);
     if (success) {
       onClose();
     } else {
@@ -116,6 +147,33 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({ onClose }) => {
               </motion.button>
             ))}
           </div>
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold text-slate-300 block mb-2">Choose your match pace</label>
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              { id: 'live' as TurnMode, title: 'Live', detail: '60 seconds per turn' },
+              { id: 'async' as TurnMode, title: 'Async', detail: '1 hour per turn' },
+            ]).map((option) => {
+              const selected = selectedTurnMode === option.id;
+              const matchesRoom = !roomTurnMode || roomTurnMode === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setSelectedTurnMode(option.id)}
+                  className={`rounded-xl border p-3 text-left transition-colors ${selected ? 'border-amber-400 bg-amber-500/15 text-white' : 'border-white/10 bg-slate-800/60 text-slate-300'} ${!matchesRoom ? 'opacity-50' : ''}`}
+                >
+                  <span className="block text-xs font-bold">{option.title}{roomTurnMode === option.id ? ' · Room pace' : ''}</span>
+                  <span className="block text-[10px] text-slate-400">{option.detail}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-1.5 text-[10px] text-slate-500">
+            {checkingRoom ? 'Checking room settings…' : roomTurnMode ? `Host selected ${roomTurnMode === 'live' ? 'Live' : 'Async'}; choose the same pace to join.` : 'The room pace must match the host’s selection.'}
+          </p>
         </div>
 
         {errorMsg && (

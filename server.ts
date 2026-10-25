@@ -6,7 +6,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer as createViteServer } from 'vite';
-import { LiveSpectateMatch, WhotCard, WhotShape, DraughtsPieceColor } from './src/types';
+import { LiveSpectateMatch, WhotCard, WhotShape, DraughtsPieceColor, normalizeTurnMode } from './src/types';
 import { escrowEngine } from './server/escrowEngine';
 import { pool } from './src/db/index';
 import { telegramBotListener, TelegramWithdrawalData, TelegramFiatDepositData } from './server/telegramBot';
@@ -1556,6 +1556,7 @@ const LIVE_MATCHES: LiveSpectateMatch[] = [];
 // Room subscriber tracking: Map<matchId, Set<WebSocket>>
 const matchSpectators = new Map<string, Set<WebSocket>>();
 const p2pRoomClients = new Map<string, Set<WebSocket>>();
+const p2pDisconnectGraceTimers = new Map<string, { username: string; timer: NodeJS.Timeout }>();
 const p2pRoomMeta = new Map<string, any>();
 const P2P_STATES_FILE_PATH = path.join(process.cwd(), 'match_states.json');
 const P2P_ROOMS_FILE_PATH = path.join(process.cwd(), 'match_rooms.json');
@@ -1630,7 +1631,7 @@ function rememberP2pRoom(roomCode: string, room: any) {
   persistP2pRoomMetadata();
 }
 
-function getP2pTurnOwnerUsername(state: any, room: any, senderUsername: string): string | null {
+function getP2pTurnOwnerUsername(state: any, room: any): string | null {
   const host = String(room?.hostUsername || room?.hostName || '').trim();
   const challenger = String(room?.joinedPlayer?.username || '').trim();
   const role = String(state?.turnRole || '').toLowerCase();
@@ -1639,11 +1640,10 @@ function getP2pTurnOwnerUsername(state: any, room: any, senderUsername: string):
   const turn = String(state?.turn || '').toLowerCase();
   if (turn === 'p1') return host || null;
   if (turn === 'p2') return challenger || null;
-  if (turn === 'player') return senderUsername || null;
-  if (turn === 'opponent') {
-    if (senderUsername && senderUsername.toLowerCase() === host.toLowerCase()) return challenger || null;
-    if (senderUsername && senderUsername.toLowerCase() === challenger.toLowerCase()) return host || null;
-  }
+  // Game state uses a shared host/opponent perspective: `player` is the host
+  // and `opponent` is the challenger, regardless of who sent the update.
+  if (turn === 'player') return host || null;
+  if (turn === 'opponent') return challenger || null;
   return null;
 }
 
@@ -2530,6 +2530,11 @@ app.post('/api/rooms/:roomCode/join', (req, res) => {
     return res.status(404).json({ success: false, error: 'Room not found' });
   }
   const { player2 } = req.body;
+  const requestedTurnMode = req.body?.turnMode ? normalizeTurnMode(req.body.turnMode) : null;
+  const roomTurnMode = normalizeTurnMode(room.turnMode);
+  if (requestedTurnMode && requestedTurnMode !== roomTurnMode) {
+    return res.status(409).json({ success: false, error: `This room is ${roomTurnMode}. Select the same match pace to join.` });
+  }
   if (player2) {
     const hostUser = String(room.hostUsername || room.host?.username || '').trim().toLowerCase();
     const joiningUser = String(player2.username || player2.userId || player2.id || '').trim().toLowerCase();
@@ -3148,6 +3153,20 @@ async function startServer() {
               }
               p2pRoomClients.get(cleanCode)!.add(ws);
               (ws as any).p2pRoomCode = cleanCode;
+              (ws as any).p2pUserId = userId || username;
+              (ws as any).p2pUsername = username;
+
+              const reconnectKey = `${cleanCode}:${String(username || '').toLowerCase()}`;
+              const pendingDisconnect = p2pDisconnectGraceTimers.get(reconnectKey);
+              if (pendingDisconnect) {
+                clearTimeout(pendingDisconnect.timer);
+                p2pDisconnectGraceTimers.delete(reconnectKey);
+                for (const client of p2pRoomClients.get(cleanCode) || []) {
+                  if (client !== ws && client.readyState === WebSocket.OPEN) {
+                    client.send(JSON.stringify({ type: 'p2p_player_reconnected', roomCode: cleanCode, username }));
+                  }
+                }
+              }
 
               let existingRoom = sharedRoomsStore.get(cleanCode) || p2pRoomMeta.get(cleanCode) || p2pPersistedRooms.get(cleanCode);
               if (!existingRoom && stake) {
@@ -3160,7 +3179,7 @@ async function startServer() {
                   stake: Number(stake),
                   pot: pot ? Number(pot) : Math.round(Number(stake) * 1.9),
                   gameMode: gameMode || (cleanCode.includes('BD') ? 'bead16' : 'whot'),
-                  turnMode: turnMode || 'casual',
+                  turnMode: normalizeTurnMode(turnMode),
                 };
                 p2pRoomMeta.set(cleanCode, existingRoom);
                 rememberP2pRoom(cleanCode, existingRoom);
@@ -3221,7 +3240,7 @@ async function startServer() {
                     stake: existingRoom.stake,
                     pot: existingRoom.pot || Math.round(existingRoom.stake * 1.9),
                     gameMode: existingRoom.gameMode,
-                    turnMode: existingRoom.turnMode || turnMode || 'casual',
+                    turnMode: normalizeTurnMode(existingRoom.turnMode || turnMode),
                     hostUsername: existingRoom.hostUsername || existingRoom.hostName,
                     joinedPlayer: existingRoom.joinedPlayer || null,
                   })
@@ -3248,7 +3267,7 @@ async function startServer() {
               const previousState = previousRecord?.state || previousRecord;
               const previousOwner = previousRecord?.turnOwnerUsername || previousState?.turnOwnerUsername || null;
               const senderUsername = String((ws as any).p2pUsername || '');
-              const nextOwner = state && !state.isGameOver ? getP2pTurnOwnerUsername(state, room, senderUsername) : null;
+              const nextOwner = state && !state.isGameOver ? getP2pTurnOwnerUsername(state, room) : null;
               if (state && typeof state === 'object') {
                 p2pGameStates.set(cleanCode, { state, turnOwnerUsername: nextOwner, senderUsername, updatedAt: Date.now() });
                 persistP2pGameStates();
@@ -3379,54 +3398,45 @@ async function startServer() {
 
         const room = sharedRoomsStore.get(cleanCode) || p2pRoomMeta.get(cleanCode);
         if (room) {
-          // Notify remaining subscribers in the room that opponent disconnected / refreshed
-          if (room.turnMode !== 'casual' && subscribers && subscribers.size > 0) {
-            const playerLeftPayload = JSON.stringify({
-              type: 'p2p_player_left',
-              roomCode: cleanCode,
-              disconnectedUserId: discUserId,
-              disconnectedUsername: discUsername,
-              gameMessage: `⚠️ @${discUsername || 'Opponent'} disconnected / refreshed page. Match forfeited!`,
-            });
-            for (const subscriber of subscribers) {
-              if (subscriber !== ws && subscriber.readyState === WebSocket.OPEN) {
-                subscriber.send(playerLeftPayload);
-              }
+          if (normalizeTurnMode(room.turnMode) === 'live' && room.joinedPlayer && room.hostUsername) {
+            const graceSeconds = 30;
+            const reconnectKey = `${cleanCode}:${String(discUsername || '').toLowerCase()}`;
+            for (const subscriber of subscribers || []) {
+              if (subscriber.readyState === WebSocket.OPEN) subscriber.send(JSON.stringify({
+                type: 'p2p_player_disconnected', roomCode: cleanCode, disconnectedUsername: discUsername, graceSeconds,
+              }));
             }
-          }
-
-          // If the match was in progress (both players joined), auto-settle forfeit on backend
-          if (room.turnMode !== 'casual' && room.joinedPlayer && room.hostUsername) {
-            const hostUser = (room.hostUsername || '').toLowerCase();
-            const discUser = (discUsername || '').toLowerCase();
-            const isHostDisc = hostUser === discUser || room.hostUserId === discUserId;
-
-            const winnerUsername = isHostDisc ? room.joinedPlayer.username : room.hostUsername;
-            const loserUsername = isHostDisc ? room.hostUsername : room.joinedPlayer.username;
-            const winnerId = isHostDisc ? (room.joinedPlayer.id || room.joinedPlayer.username) : (room.hostUserId || room.hostUsername);
-            const loserId = isHostDisc ? (room.hostUserId || room.hostUsername) : (room.joinedPlayer.id || room.joinedPlayer.username);
-            const matchId = room.id || `M-${cleanCode}`;
-
-            try {
-              if (escrowEngine.getMatchSession(matchId)) {
-                // Settle in escrowEngine backend ledger & release escrow locks
-                escrowEngine.verifyAndSettleMatch(matchId, winnerId, {
-                  gameMode: room.gameMode || 'whot',
-                  winner: isHostDisc ? 'opponent' : 'player',
-                  disconnectForfeit: true,
-                  reason: `Match forfeited due to browser refresh / disconnect by @${discUsername}`,
-                });
-              } else {
-                const potAmount = room.pot || Math.round((room.stake || 2500) * 1.9);
-                escrowEngine.deposit(winnerId, winnerUsername, potAmount, 'fiat_naira', {
-                  notes: `Match victory payout: @${discUsername} forfeited due to browser refresh`,
-                });
+            const timer = setTimeout(() => {
+              p2pDisconnectGraceTimers.delete(reconnectKey);
+              const stillConnected = [...(p2pRoomClients.get(cleanCode) || [])].some((client) =>
+                client.readyState === WebSocket.OPEN && String((client as any).p2pUsername || '').toLowerCase() === String(discUsername || '').toLowerCase());
+              if (stillConnected) return;
+              const hostUser = String(room.hostUsername || '').toLowerCase();
+              const discUser = String(discUsername || '').toLowerCase();
+              const isHostDisc = hostUser === discUser || room.hostUserId === discUserId;
+              const winnerUsername = isHostDisc ? room.joinedPlayer.username : room.hostUsername;
+              const winnerId = isHostDisc ? (room.joinedPlayer.id || room.joinedPlayer.username) : (room.hostUserId || room.hostUsername);
+              const matchId = room.id || `M-${cleanCode}`;
+              try {
+                if (escrowEngine.getMatchSession(matchId)) {
+                  escrowEngine.verifyAndSettleMatch(matchId, winnerId, {
+                    gameMode: room.gameMode || 'whot', winner: isHostDisc ? 'opponent' : 'player',
+                    disconnectForfeit: true, reason: `Match forfeited after @${discUsername} failed to reconnect`,
+                  });
+                } else {
+                  const potAmount = room.pot || Math.round((room.stake || 2500) * 1.9);
+                  escrowEngine.deposit(winnerId, winnerUsername, potAmount, 'fiat_naira', { notes: `Match victory payout after disconnect timeout` });
+                }
+              } catch (err) { console.warn('[P2P Disconnect] Auto-settlement warning:', err); }
+              for (const subscriber of p2pRoomClients.get(cleanCode) || []) {
+                if (subscriber.readyState === WebSocket.OPEN) subscriber.send(JSON.stringify({
+                  type: 'p2p_player_left', roomCode: cleanCode, disconnectedUserId: discUserId,
+                  disconnectedUsername: discUsername, gameMessage: `⚠️ @${discUsername || 'Opponent'} did not reconnect. Match forfeited!`,
+                }));
               }
-              console.log(`[P2P Disconnect] Auto-settled room ${cleanCode} after @${discUsername} disconnect. Winner: @${winnerUsername}`);
-            } catch (err) {
-              console.warn('[P2P Disconnect] Auto-settlement warning:', err);
-            }
-          } else if (room.turnMode !== 'casual' && !room.joinedPlayer && room.hostUsername) {
+            }, graceSeconds * 1000);
+            p2pDisconnectGraceTimers.set(reconnectKey, { username: discUsername || '', timer });
+          } else if (normalizeTurnMode(room.turnMode) === 'live' && !room.joinedPlayer && room.hostUsername) {
             // Room was waiting for opponent: refund host's locked escrow stake
             const matchId = room.id || `M-${cleanCode}`;
             try {

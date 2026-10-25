@@ -96,7 +96,7 @@ export const Bead16GameScreen: React.FC = () => {
   const isMyTurn = turn === myRole;
 
   // Turn Countdown Timer: 15 seconds per turn
-  const maxTurnTime = TURN_MODE_SECONDS[activeMatch?.turnMode || 'casual'];
+  const maxTurnTime = TURN_MODE_SECONDS[activeMatch?.turnMode || 'live'];
   const [turnTimeLeft, setTurnTimeLeft] = useState<number>(maxTurnTime);
 
   // Reset turn countdown timer whenever turn or multi-jump state updates

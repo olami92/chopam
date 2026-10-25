@@ -30,7 +30,7 @@ const MIN_STAKE = 100;
 export const CreateRoomModal: React.FC<CreateRoomModalProps> = ({ onClose, initialGame = 'whot' }) => {
   const { user, startMatch, createTable } = useGame();
   const [selectedGame, setSelectedGame] = useState<GameMode>(initialGame);
-  const [turnMode, setTurnMode] = useState<TurnMode>(initialGame === 'ludo_blitz' ? 'fast_blitz' : 'casual');
+  const [turnMode, setTurnMode] = useState<TurnMode>('live');
   const [selectedStake, setSelectedStake] = useState<number>(2500);
   const [stakeInputValue, setStakeInputValue] = useState<string>('2500');
   const [randomId] = useState(() => Math.floor(1000 + Math.random() * 9000));
@@ -69,7 +69,8 @@ export const CreateRoomModal: React.FC<CreateRoomModalProps> = ({ onClose, initi
 
   const handleCopyFullInvite = () => {
     const gameTitle = gameOptions.find((g) => g.id === selectedGame)?.title || 'Game';
-    const text = `🎮 Join my private Tete Arena match!\nGame: ${gameTitle}\nStake: ₦${selectedStake.toLocaleString()}\nRoom Code: ${roomCode}\n\nOpen the match: ${telegram.getMatchDeepLink(roomCode)}`;
+    const pace = turnMode === 'live' ? 'Live · 60 seconds per turn' : 'Async · 1 hour per turn';
+    const text = `🎮 Join my private Tete Arena match!\nGame: ${gameTitle}\nMode: ${pace}\nStake: ₦${selectedStake.toLocaleString()}\nRoom Code: ${roomCode}\n\nOpen the match: ${telegram.getMatchDeepLink(roomCode)}`;
     navigator.clipboard.writeText(text);
     setCopiedFull(true);
     sound.playClick();
@@ -215,11 +216,11 @@ export const CreateRoomModal: React.FC<CreateRoomModalProps> = ({ onClose, initi
 
         {/* Stake Configuration (Presets + Custom Input) */}
         <div>
-          <label className="text-xs font-semibold text-slate-300 block mb-2">Turn Timer</label>
+          <label className="text-xs font-semibold text-slate-300 block mb-2">Match Pace</label>
           <div className="grid grid-cols-2 gap-2">
             {([
-              { id: 'casual' as TurnMode, title: 'Casual', detail: '1 hour per turn' },
-              { id: 'fast_blitz' as TurnMode, title: 'Fast Blitz', detail: '45 seconds per turn' },
+              { id: 'live' as TurnMode, title: 'Live', detail: '60 seconds per turn' },
+              { id: 'async' as TurnMode, title: 'Async', detail: '1 hour per turn' },
             ]).map((option) => (
               <button key={option.id} type="button" onClick={() => setTurnMode(option.id)}
                 className={`rounded-xl border p-3 text-left ${turnMode === option.id ? 'border-amber-400 bg-amber-500/15 text-white' : 'border-white/10 bg-slate-800/60 text-slate-300'}`}>

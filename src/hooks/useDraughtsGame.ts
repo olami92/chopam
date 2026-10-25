@@ -116,7 +116,7 @@ export function useDraughtsGame(onGameOver: (winner: 'player' | 'opponent') => v
   }, [isHost]);
 
   // Turn Countdown Timer: 15s for Draughts
-  const maxTurnTime = TURN_MODE_SECONDS[activeMatch?.turnMode || 'casual'];
+  const maxTurnTime = TURN_MODE_SECONDS[activeMatch?.turnMode || 'live'];
   const [turnTimeLeft, setTurnTimeLeft] = useState<number>(maxTurnTime);
 
   // Find piece at (row, col)

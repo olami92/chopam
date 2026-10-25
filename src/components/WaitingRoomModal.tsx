@@ -96,6 +96,11 @@ export const WaitingRoomModal: React.FC = () => {
           </div>
         </div>
 
+        <div className="flex items-center justify-between rounded-xl border border-cyan-400/20 bg-cyan-500/5 px-3 py-2 text-[11px]">
+          <span className="font-bold text-cyan-200">{activeMatch.turnMode === 'async' ? 'Async match' : 'Live match'}</span>
+          <span className="text-slate-400">{activeMatch.turnMode === 'async' ? '1 hour per turn' : '60 seconds per turn'}</span>
+        </div>
+
         {/* Escrow Status Banner */}
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-medium">
           <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
