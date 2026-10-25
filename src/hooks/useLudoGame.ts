@@ -389,6 +389,15 @@ function getCryptographicDiceRoll(): number {
         if (!hasValidMove) {
           setGameMessage(`You rolled ${finalVal}. No valid moves! Opponent turn.`);
           setLastAction(`You rolled ${finalVal} (No moves)`);
+          if (isP2P && sendP2pStateUpdate) {
+            sendP2pStateUpdate({
+              playerTokens,
+              opponentTokens,
+              turn,
+              diceValue: finalVal,
+              lastAction: `Rolled ${finalVal} (No moves)`,
+            });
+          }
           recordReplayStep({
             turn: isHost ? 'player' : 'opponent',
             actorName: user?.displayName || 'Player (You)',
@@ -414,7 +423,7 @@ function getCryptographicDiceRoll(): number {
                 lastAction: `Rolled ${finalVal} (No moves)`,
               });
             }
-          }, 1000);
+          }, 1600);
         } else {
           setGameMessage(`Rolled ${finalVal}! Tap a highlighted token to move.`);
           setLastAction(`You rolled ${finalVal}`);

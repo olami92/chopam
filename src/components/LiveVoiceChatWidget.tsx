@@ -260,12 +260,12 @@ export const LiveVoiceChatWidget: React.FC = () => {
   if (!isP2PMatch) return null;
 
   return (
-    <div className="w-full px-3 py-1.5 z-20 sticky top-14">
+    <div className="w-full px-3 py-0.5 z-20 sticky top-14">
       {/* Hidden HTML Audio element for remote player voice output */}
       <audio ref={remoteAudioRef} autoPlay playsInline muted={!isSpeakerOn} className="hidden" />
 
       {/* Live Voice Chat Bar Container */}
-      <div className="bg-slate-900/90 backdrop-blur-xl border border-cyan-500/30 rounded-2xl p-2.5 shadow-[0_4px_20px_rgba(6,182,212,0.15)] flex flex-col gap-1.5 transition-all">
+      <div className="bg-slate-900/90 backdrop-blur-xl border border-cyan-500/30 rounded-xl p-2 shadow-[0_4px_20px_rgba(6,182,212,0.15)] flex flex-col gap-1 transition-all">
         <div className="flex items-center justify-between">
           {/* Status Indicator */}
           <div className="flex items-center gap-2">
@@ -331,10 +331,10 @@ export const LiveVoiceChatWidget: React.FC = () => {
             )}
 
             {/* Mic Toggle Button */}
-            <button
+              <button
               onClick={toggleMic}
               title={isMicOn ? 'Mute Microphone' : 'Turn On Microphone'}
-              className={`p-2 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
+              className={`p-1.5 rounded-lg border flex items-center justify-center transition-all cursor-pointer ${
                 isMicOn
                   ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.3)] scale-105'
                   : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400 border-white/10'
@@ -347,7 +347,7 @@ export const LiveVoiceChatWidget: React.FC = () => {
             <button
               onClick={toggleSpeaker}
               title={isSpeakerOn ? 'Mute Opponent Audio' : 'Unmute Opponent Audio'}
-              className={`p-2 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
+              className={`p-1.5 rounded-lg border flex items-center justify-center transition-all cursor-pointer ${
                 isSpeakerOn
                   ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
                   : 'bg-rose-500/20 border-rose-500/40 text-rose-400'
