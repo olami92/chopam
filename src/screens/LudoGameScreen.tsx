@@ -152,7 +152,7 @@ export const LudoGameScreen: React.FC = () => {
     // Non-playable inner corner cells adjacent to the center home cross: (6,6), (6,8), (8,6), (8,8)
     // Colored black so tokens turning from arm-to-arm visibly bypass these non-walkable dead zones
     if ((r === 6 && c === 6) || (r === 6 && c === 8) || (r === 8 && c === 6) || (r === 8 && c === 8)) {
-      return isBlitz ? 'bg-slate-950 border border-slate-800' : 'bg-black border border-slate-900';
+      return isBlitz ? 'bg-slate-950 border border-slate-800' : 'bg-[#e9e4d7] border border-[#d6cfbf]';
     }
 
     if (isBlitz) {
@@ -174,7 +174,7 @@ export const LudoGameScreen: React.FC = () => {
       if (r < 6 && c < 6) {
         if (r >= 1 && r <= 4 && c >= 1 && c <= 4) {
           const isTargetSpot = (r === 2 && c === 2) || (r === 2 && c === 3) || (r === 3 && c === 2) || (r === 3 && c === 3);
-          if (isTargetSpot) return 'bg-red-50 border-2 border-red-500/60 rounded-full shadow-inner';
+          if (isTargetSpot) return 'bg-white border-2 border-red-500 rounded-full';
           return 'bg-white border-slate-200';
         }
         return 'bg-[#dc2626] border border-red-700/60';
@@ -184,7 +184,7 @@ export const LudoGameScreen: React.FC = () => {
       if (r < 6 && c > 8) {
         if (r >= 1 && r <= 4 && c >= 10 && c <= 13) {
           const isTargetSpot = (r === 2 && c === 11) || (r === 2 && c === 12) || (r === 3 && c === 11) || (r === 3 && c === 12);
-          if (isTargetSpot) return 'bg-emerald-50 border-2 border-emerald-500/60 rounded-full shadow-inner';
+          if (isTargetSpot) return 'bg-white border-2 border-emerald-600 rounded-full';
           return 'bg-white border-slate-200';
         }
         return 'bg-[#059669] border border-emerald-700/60';
@@ -194,7 +194,7 @@ export const LudoGameScreen: React.FC = () => {
       if (r > 8 && c < 6) {
         if (r >= 10 && r <= 13 && c >= 1 && c <= 4) {
           const isTargetSpot = (r === 11 && c === 2) || (r === 11 && c === 3) || (r === 12 && c === 2) || (r === 12 && c === 3);
-          if (isTargetSpot) return 'bg-blue-50 border-2 border-blue-500/60 rounded-full shadow-inner';
+          if (isTargetSpot) return 'bg-white border-2 border-blue-600 rounded-full';
           return 'bg-white border-slate-200';
         }
         return 'bg-[#2563eb] border border-blue-700/60';
@@ -204,14 +204,14 @@ export const LudoGameScreen: React.FC = () => {
       if (r > 8 && c > 8) {
         if (r >= 10 && r <= 13 && c >= 10 && c <= 13) {
           const isTargetSpot = (r === 11 && c === 11) || (r === 11 && c === 12) || (r === 12 && c === 11) || (r === 12 && c === 12);
-          if (isTargetSpot) return 'bg-amber-50 border-2 border-amber-500/60 rounded-full shadow-inner';
+          if (isTargetSpot) return 'bg-white border-2 border-amber-500 rounded-full';
           return 'bg-white border-slate-200';
         }
         return 'bg-[#eab308] border border-amber-600/60';
       }
 
       // Center Home (7,7)
-      if (r === 7 && c === 7) return 'bg-[#18181b]';
+      if (r === 7 && c === 7) return 'bg-white';
 
       // Home Stretches
       if (r === 7 && c >= 1 && c <= 6) return 'bg-[#dc2626] border border-red-700/50';
@@ -399,10 +399,10 @@ export const LudoGameScreen: React.FC = () => {
       <div className="px-3 flex items-center justify-center">
         <div
           id={isBlitz ? 'ludo-blitz-board' : 'ludo-classic-board'}
-          className={`game-board p-2 grid grid-cols-15 grid-rows-15 relative ${
+          className={`game-board grid grid-cols-15 grid-rows-15 relative ${
             isBlitz
-              ? 'bg-slate-950 border-2 border-slate-600 rounded-2xl shadow-[0_12px_30px_rgba(0,0,0,0.35)] gap-[1.5px]'
-              : 'bg-[#0e1626] border-4 border-amber-900/60 rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.85)] gap-[1px]'
+              ? 'p-2 bg-slate-950 border-2 border-slate-600 rounded-2xl shadow-[0_12px_30px_rgba(0,0,0,0.35)] gap-[1.5px]'
+              : 'p-1 bg-[#f8f5eb] border-[3px] border-[#6b6252] rounded-md shadow-[0_8px_20px_rgba(0,0,0,0.35)] gap-px'
           }`}
           style={{ gridTemplateColumns: 'repeat(15, minmax(0, 1fr))' }}
         >
@@ -416,7 +416,7 @@ export const LudoGameScreen: React.FC = () => {
               return (
                 <div
                   key={`${r}-${c}`}
-                  className={`relative flex items-center justify-center rounded-[2px] ${cellBg}`}
+                  className={`relative flex items-center justify-center ${isBlitz ? 'rounded-[2px]' : 'rounded-none'} ${cellBg}`}
                 >
                   {/* Center Core 4-Triangle SVG (Classic) or Target Icon (Blitz) */}
                   {isCenter && (
@@ -451,18 +451,6 @@ export const LudoGameScreen: React.FC = () => {
                     ) : (
                       <Star className="w-2.5 h-2.5 text-slate-700 fill-slate-300 absolute opacity-80" />
                     )
-                  )}
-
-                  {/* Render Decorative Green & Blue 3D Pawns in unused bases */}
-                  {!isBlitz && tokens.length === 0 && (
-                    <>
-                      {((r === 2 && c === 11) || (r === 2 && c === 12) || (r === 3 && c === 11) || (r === 3 && c === 12)) && (
-                        <Ludo3DPawn color="green" sizeClassName="w-3.5 h-4 sm:w-4 sm:h-5" />
-                      )}
-                      {((r === 11 && c === 2) || (r === 11 && c === 3) || (r === 12 && c === 2) || (r === 12 && c === 3)) && (
-                        <Ludo3DPawn color="blue" sizeClassName="w-3.5 h-4 sm:w-4 sm:h-5" />
-                      )}
-                    </>
                   )}
 
                   {/* Render Tokens */}
