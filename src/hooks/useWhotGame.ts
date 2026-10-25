@@ -197,6 +197,7 @@ export function useWhotGame(onGameOver: (winner: 'player' | 'opponent') => void)
 
   // Nonce to trigger AI turns even when turn remains 'opponent'
   const [aiActionNonce, setAiActionNonce] = useState<number>(0);
+  const actedAiTurnRef = useRef<number | null>(null);
 
   // Turn Countdown Timer: 20s for Whot (Forfeit defeat at 4 timeouts)
   const maxTurnTime = TURN_MODE_SECONDS[activeMatch?.turnMode || 'live'];
@@ -964,10 +965,12 @@ export function useWhotGame(onGameOver: (winner: 'player' | 'opponent') => void)
 
   // AI Opponent Turn Handler
   useEffect(() => {
-    if (isGameOver || turn !== 'opponent' || activeMatch?.isVsAi === false) return;
+    if (isGameOver || turn !== 'opponent' || isChoosingShape || activeMatch?.isVsAi === false) return;
+    if (actedAiTurnRef.current === aiActionNonce) return;
 
     const timer = setTimeout(() => {
-      if (isGameOver) return;
+      if (isGameOver || actedAiTurnRef.current === aiActionNonce) return;
+      actedAiTurnRef.current = aiActionNonce;
 
       // Handle pending penalty defense or draw
       if (pendingPenalty) {
@@ -1252,6 +1255,7 @@ export function useWhotGame(onGameOver: (winner: 'player' | 'opponent') => void)
   }, [
     isGameOver,
     turn,
+    isChoosingShape,
     aiActionNonce,
     opponentHand,
     pendingPenalty,

@@ -311,12 +311,12 @@ export class EscrowApiService {
   /**
    * Register player 2 joining room on backend server
    */
-  public static async joinRoom(roomCode: string, player2Data: Record<string, any>): Promise<any> {
+  public static async joinRoom(roomCode: string, player2Data: Record<string, any>, turnMode?: string): Promise<any> {
     try {
       const res = await fetch(`/api/rooms/${encodeURIComponent(roomCode.trim().toUpperCase())}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ player2: player2Data }),
+        body: JSON.stringify({ player2: player2Data, turnMode }),
       });
       if (res.ok) {
         const data = await res.json();

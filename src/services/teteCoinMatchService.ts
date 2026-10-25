@@ -115,7 +115,7 @@ export async function startTeteCoinBead16Match(stake: number, coinBalance: numbe
     coinMatchId: match.matchId,
     roomCode: match.matchId,
     gameMode,
-    turnMode: gameMode === 'ludo_blitz' ? 'fast_blitz' : 'casual',
+    turnMode: 'live',
     turnDeadlineAt: Number((match.state as any).turnDeadlineAt || Date.now() + (gameMode === 'ludo_blitz' ? 45 : 3600) * 1000),
     stake: match.stake,
     pot: match.stake * 2,
