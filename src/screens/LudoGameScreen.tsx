@@ -152,33 +152,22 @@ export const LudoGameScreen: React.FC = () => {
     // Non-playable inner corner cells adjacent to the center home cross: (6,6), (6,8), (8,6), (8,8)
     // Colored black so tokens turning from arm-to-arm visibly bypass these non-walkable dead zones
     if ((r === 6 && c === 6) || (r === 6 && c === 8) || (r === 8 && c === 6) || (r === 8 && c === 8)) {
-      return isBlitz ? 'bg-[#030712] border border-cyan-950' : 'bg-black border border-slate-900';
+      return isBlitz ? 'bg-slate-950 border border-slate-800' : 'bg-black border border-slate-900';
     }
 
     if (isBlitz) {
-      // ===== BLITZ CYBER ARENA STYLING =====
-      // Red Base (Sector Alpha - Player Launch Bay)
-      if (r < 6 && c < 6) return 'bg-gradient-to-br from-rose-950/90 via-purple-950/80 to-slate-950 border border-rose-500/40 shadow-[inset_0_0_14px_rgba(244,63,94,0.3)]';
-      // Green Base (Sector Beta - Inactive Deactivated Matrix)
-      if (r < 6 && c > 8) return 'bg-slate-950/95 border border-emerald-500/10 opacity-35';
-      // Blue Base (Sector Gamma - Inactive Deactivated Matrix)
-      if (r > 8 && c < 6) return 'bg-slate-950/95 border border-cyan-500/10 opacity-35';
-      // Yellow Base (Sector Omega - Opponent Launch Bay)
-      if (r > 8 && c > 8) return 'bg-gradient-to-br from-amber-950/90 via-yellow-950/80 to-slate-950 border border-amber-500/40 shadow-[inset_0_0_14px_rgba(245,158,11,0.3)]';
-
-      // Center Home (7,7) - Quantum Singularity Core
-      if (r === 7 && c === 7) return 'bg-gradient-to-tr from-cyan-400 via-fuchsia-600 to-amber-400 border-2 border-cyan-200 shadow-[0_0_24px_rgba(6,182,212,0.95)] animate-pulse';
-
-      // Red Laser Home Stretch
-      if (r === 7 && c >= 1 && c <= 6) return 'bg-gradient-to-r from-rose-600 via-rose-500 to-fuchsia-600 border border-rose-300/70 shadow-[0_0_10px_rgba(244,63,94,0.8)]';
-      // Yellow Laser Home Stretch
-      if (r === 7 && c >= 8 && c <= 13) return 'bg-gradient-to-l from-amber-500 via-yellow-400 to-amber-300 border border-amber-200/70 shadow-[0_0_10px_rgba(245,158,11,0.8)]';
-
-      // Turbo Warp Accelerator Gates
-      if (isStarCell(r, c)) return 'bg-cyan-500/35 border-2 border-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.85)]';
-
-      // Neutral Cyber Track Cells
-      return 'bg-[#060b16] border border-cyan-500/20 hover:border-cyan-400/50 transition-colors';
+      // Keep the familiar Ludo color map, with calmer contrast for Blitz.
+      if (r < 6 && c < 6) return 'bg-rose-950/70 border border-rose-400/50';
+      if (r < 6 && c > 8) return 'bg-slate-900 border border-slate-700';
+      if (r > 8 && c < 6) return 'bg-slate-900 border border-slate-700';
+      if (r > 8 && c > 8) return 'bg-amber-950/70 border border-amber-400/50';
+      if (r === 7 && c === 7) return 'bg-slate-700 border border-slate-400';
+      if (r === 7 && c >= 1 && c <= 6) return 'bg-rose-800/90 border border-rose-500/70';
+      if (r === 7 && c >= 8 && c <= 13) return 'bg-amber-700/90 border border-amber-400/70';
+      if (c === 7 && r >= 1 && r <= 6) return 'bg-slate-800 border border-slate-700';
+      if (c === 7 && r >= 8 && r <= 13) return 'bg-slate-800 border border-slate-700';
+      if (isStarCell(r, c)) return 'bg-cyan-900/70 border border-cyan-300/80';
+      return 'bg-slate-800 border border-slate-700';
     } else {
       // ===== CLASSIC HERITAGE BOARD STYLING (Photo-Accurate Reference Board) =====
       // 1. Red Base (Top-Left 6x6)
@@ -412,29 +401,11 @@ export const LudoGameScreen: React.FC = () => {
           id={isBlitz ? 'ludo-blitz-board' : 'ludo-classic-board'}
           className={`game-board p-2 grid grid-cols-15 grid-rows-15 relative ${
             isBlitz
-              ? 'bg-[#030712] border-2 border-cyan-400/80 rounded-2xl shadow-[0_0_35px_rgba(6,182,212,0.35),inset_0_0_18px_rgba(6,182,212,0.12)] gap-[1.5px]'
+              ? 'bg-slate-950 border-2 border-slate-600 rounded-2xl shadow-[0_12px_30px_rgba(0,0,0,0.35)] gap-[1.5px]'
               : 'bg-[#0e1626] border-4 border-amber-900/60 rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.85)] gap-[1px]'
           }`}
           style={{ gridTemplateColumns: 'repeat(15, minmax(0, 1fr))' }}
         >
-          {/* Cyber HUD Corner Telemetry (Blitz Only) */}
-          {isBlitz && (
-            <>
-              <div className="absolute top-1 left-1.5 text-[8px] font-mono font-bold text-cyan-400/70 select-none pointer-events-none">
-                ⌜ALPHA
-              </div>
-              <div className="absolute top-1 right-1.5 text-[8px] font-mono font-bold text-cyan-400/70 select-none pointer-events-none">
-                BETA⌝
-              </div>
-              <div className="absolute bottom-1 left-1.5 text-[8px] font-mono font-bold text-cyan-400/70 select-none pointer-events-none">
-                ⌞GAMMA
-              </div>
-              <div className="absolute bottom-1 right-1.5 text-[8px] font-mono font-bold text-amber-400/80 select-none pointer-events-none">
-                OMEGA⌟
-              </div>
-            </>
-          )}
-
           {Array.from({ length: 15 }).map((_, r) =>
             Array.from({ length: 15 }).map((__, c) => {
               const tokens = getTokensAtCell(r, c);
@@ -450,7 +421,7 @@ export const LudoGameScreen: React.FC = () => {
                   {/* Center Core 4-Triangle SVG (Classic) or Target Icon (Blitz) */}
                   {isCenter && (
                     isBlitz ? (
-                      <Target className="w-3.5 h-3.5 absolute text-white animate-spin-slow drop-shadow-[0_0_6px_rgba(255,255,255,0.9)]" />
+                      <Target className="w-3.5 h-3.5 absolute text-white/90" />
                     ) : (
                       <div className="absolute inset-0 z-0 pointer-events-none">
                         <svg viewBox="0 0 100 100" className="w-full h-full">
@@ -476,7 +447,7 @@ export const LudoGameScreen: React.FC = () => {
                   {/* Star / Turbo Warp accelerator icon */}
                   {hasStar && !isCenter && (
                     isBlitz ? (
-                      <Zap className="w-2.5 h-2.5 text-cyan-300 fill-cyan-300 absolute drop-shadow-[0_0_5px_rgba(6,182,212,0.95)] animate-pulse" />
+                      <Zap className="w-2.5 h-2.5 text-cyan-200 fill-cyan-200 absolute" />
                     ) : (
                       <Star className="w-2.5 h-2.5 text-slate-700 fill-slate-300 absolute opacity-80" />
                     )
@@ -541,9 +512,11 @@ export const LudoGameScreen: React.FC = () => {
                                 onSelectPlayerToken(myTokenObj);
                               }
                             }}
-                            className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full flex items-center justify-center font-bold text-[8px] transition-all bg-gradient-to-br from-rose-500 via-fuchsia-600 to-purple-600 text-white border border-cyan-300 shadow-[0_0_12px_rgba(244,63,94,0.9)] ${
-                              isPlayable ? 'ring-3 ring-cyan-300 scale-135 animate-bounce cursor-pointer z-20' : ''
-                            }`}
+                            className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full flex items-center justify-center font-bold text-[8px] transition-all border shadow-md ${
+                              isRed
+                                ? 'bg-rose-600 border-rose-200 text-white'
+                                : 'bg-amber-400 border-amber-100 text-slate-950'
+                            } ${isPlayable ? 'ring-2 ring-white scale-125 shadow-lg cursor-pointer z-20' : ''}`}
                           >
                             {isRed ? (
                               <Zap className="w-2.5 h-2.5 fill-white text-white" />
@@ -568,9 +541,9 @@ export const LudoGameScreen: React.FC = () => {
           /* BLITZ MODE: Strategic Cyber Deck */
           <div>
             <div className="flex items-center justify-between mb-1.5 text-[11px] font-mono px-1">
-              <span className="flex items-center gap-1 text-cyan-400 font-bold">
-                <Cpu className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-                <span>CYBER DECK // SELECT MANEUVER</span>
+              <span className="flex items-center gap-1.5 text-slate-200 font-bold font-sans">
+                <Cpu className="w-3.5 h-3.5 text-cyan-300" />
+                <span>Choose a move card</span>
               </span>
               <div className="flex items-center gap-2">
                 <button
@@ -585,7 +558,7 @@ export const LudoGameScreen: React.FC = () => {
                   <BookOpen className="w-3 h-3 text-cyan-400" />
                   <span>Rules</span>
                 </button>
-                <span className="text-amber-400 font-bold tracking-tight">Need 6 to deploy</span>
+                <span className="text-[10px] text-slate-400 font-sans">Use a 6 to launch a token</span>
               </div>
             </div>
 
@@ -612,13 +585,13 @@ export const LudoGameScreen: React.FC = () => {
                     className={`h-16 rounded-xl border-2 flex flex-col items-center justify-center gap-0.5 transition-all relative overflow-hidden ${
                       isSelected
                         ? isDeploy
-                          ? 'bg-gradient-to-b from-amber-500 to-yellow-600 border-white text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.5)] -translate-y-1 cursor-pointer'
-                          : 'bg-gradient-to-b from-cyan-500 to-indigo-600 border-white text-white shadow-[0_0_20px_rgba(6,182,212,0.5)] -translate-y-1 cursor-pointer'
+                          ? 'bg-amber-400 border-white text-slate-950 shadow-md -translate-y-0.5 cursor-pointer'
+                          : 'bg-cyan-700 border-white text-white shadow-md -translate-y-0.5 cursor-pointer'
                         : canPlayCard
                         ? isDeploy
-                          ? 'bg-slate-900/90 border-amber-500/50 text-amber-400 hover:border-amber-300 hover:bg-slate-800 cursor-pointer shadow-[0_0_10px_rgba(245,158,11,0.2)]'
-                          : 'bg-slate-900/90 border-cyan-500/40 text-cyan-200 hover:border-cyan-300 hover:bg-slate-800 cursor-pointer shadow-[0_0_10px_rgba(6,182,212,0.2)]'
-                        : 'bg-slate-950/60 border-slate-800 text-slate-600 opacity-30 cursor-not-allowed grayscale'
+                          ? 'bg-slate-900 border-amber-400/70 text-amber-200 hover:bg-slate-800 cursor-pointer'
+                          : 'bg-slate-900 border-cyan-400/60 text-cyan-100 hover:bg-slate-800 cursor-pointer'
+                        : 'bg-slate-900/70 border-slate-700 text-slate-500 opacity-60 cursor-not-allowed'
                     }`}
                   >
                     <span className="text-xl font-black font-mono leading-none tracking-tight">
