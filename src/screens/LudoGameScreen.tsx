@@ -13,7 +13,6 @@ import {
 import { EscrowBanner } from '../components/EscrowBanner';
 import { MatchEndModal } from '../components/MatchEndModal';
 import { TurnTimerBar } from '../components/TurnTimerBar';
-import { GameRulesModal } from '../components/GameRulesModal';
 import { ProvablyFairModal } from '../components/ProvablyFairModal';
 import { Ludo3DPawn } from '../components/Ludo3DPawn';
 import {
@@ -29,7 +28,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   Activity,
-  BookOpen,
 } from 'lucide-react';
 import { sound } from '../services/audio';
 import { telegram } from '../services/telegram';
@@ -38,7 +36,6 @@ export const LudoGameScreen: React.FC = () => {
   const { activeMatch, settleMatch, completeCoinAiMatch, cancelMatch, startMatch, startCoinAiMatch } = useGame();
   const isBlitz = activeMatch?.gameMode === 'ludo_blitz';
   const [matchResult, setMatchResult] = useState<'player' | 'opponent' | null>(null);
-  const [showRulesModal, setShowRulesModal] = useState(false);
   const [showFairnessModal, setShowFairnessModal] = useState(false);
 
   const handleGameOver = (winner: 'player' | 'opponent') => {
@@ -169,7 +166,7 @@ export const LudoGameScreen: React.FC = () => {
       if (isStarCell(r, c)) return 'bg-cyan-900/70 border border-cyan-300/80';
       return 'bg-slate-800 border border-slate-700';
     } else {
-      // ===== CLASSIC HERITAGE BOARD STYLING (Photo-Accurate Reference Board) =====
+      // ===== CLASSIC TABLETOP BOARD =====
       // 1. Red Base (Top-Left 6x6)
       if (r < 6 && c < 6) {
         if (r >= 1 && r <= 4 && c >= 1 && c <= 4) {
@@ -211,13 +208,13 @@ export const LudoGameScreen: React.FC = () => {
       }
 
       // Center Home (7,7)
-      if (r === 7 && c === 7) return 'bg-white';
+      if (r >= 6 && r <= 8 && c >= 6 && c <= 8) return 'bg-[#f8f5eb] border border-[#ddd5c4]';
 
       // Home Stretches
-      if (r === 7 && c >= 1 && c <= 6) return 'bg-[#dc2626] border border-red-700/50';
-      if (r === 7 && c >= 8 && c <= 13) return 'bg-[#eab308] border border-amber-600/50';
-      if (c === 7 && r >= 1 && r <= 6) return 'bg-[#059669] border border-emerald-700/50';
-      if (c === 7 && r >= 8 && r <= 13) return 'bg-[#2563eb] border border-blue-700/50';
+      if (r === 7 && c >= 1 && c <= 5) return 'bg-[#dc2626] border border-red-700/50';
+      if (r === 7 && c >= 9 && c <= 13) return 'bg-[#eab308] border border-amber-600/50';
+      if (c === 7 && r >= 1 && r <= 5) return 'bg-[#059669] border border-emerald-700/50';
+      if (c === 7 && r >= 9 && r <= 13) return 'bg-[#2563eb] border border-blue-700/50';
 
       // Start Squares & Arrows
       if (r === 6 && c === 1) return 'bg-[#dc2626] border border-red-700/80';
@@ -225,8 +222,12 @@ export const LudoGameScreen: React.FC = () => {
       if (r === 1 && c === 8) return 'bg-[#059669] border border-emerald-700/80';
       if (r === 13 && c === 6) return 'bg-[#2563eb] border border-blue-700/80';
 
-      // Neutral crisp white track squares
-      return 'bg-white border border-slate-300/90';
+      if (isStarCell(r, c)) return 'bg-amber-100 border border-amber-500';
+
+      // Alternate the cream track cells to keep each route square distinct.
+      return (r + c) % 2 === 0
+        ? 'bg-white border border-slate-300'
+        : 'bg-[#f2eee4] border border-slate-300';
     }
   };
 
@@ -242,9 +243,12 @@ export const LudoGameScreen: React.FC = () => {
   const activeMoveVal = isBlitz
     ? blitzCards.find((c) => c.id === selectedCardId)?.value
     : diceValue;
+  const myHomeCount = (myColor === 'red' ? playerTokens : opponentTokens).filter((token) => token.step >= 56).length;
+  const opponentHomeCount = (oppColor === 'red' ? playerTokens : opponentTokens).filter((token) => token.step >= 56).length;
+  const myTokens = myColor === 'red' ? playerTokens : opponentTokens;
 
   return (
-    <div className={`telegram-game-screen flex-1 flex flex-col justify-between select-none overflow-hidden relative ${
+    <div className={`telegram-game-screen flex-1 flex flex-col justify-start gap-y-1 select-none overflow-hidden relative pb-32 ${
       isBlitz ? 'bg-[#020617] text-cyan-50' : 'bg-slate-950 text-slate-100'
     }`}>
       {/* Blitz Background Cyber Glow */}
@@ -255,91 +259,32 @@ export const LudoGameScreen: React.FC = () => {
       {/* Top Escrow Bar */}
       <EscrowBanner gameTitle={isBlitz ? 'Ludo Blitz' : 'Classic Ludo'} />
 
-      {/* Mode Sub-Banner: High-Octane Cyber HUD vs Heritage Rules */}
-      <div className={`px-4 py-1.5 flex items-center justify-between border-y text-[10px] ${
-        isBlitz
-          ? 'bg-cyan-950/40 border-cyan-500/30 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
-          : 'bg-slate-900/80 border-white/10 text-slate-400'
+      {/* Compact opponent progress strip */}
+      <div className={`mx-3 flex items-center justify-between gap-2 rounded-xl border px-3 py-1.5 ${
+        !isMyTurn
+          ? isBlitz ? 'border-cyan-400/40 bg-cyan-950/40 shadow-[0_0_12px_rgba(34,211,238,0.12)]' : 'border-amber-400/40 bg-slate-900/90'
+          : 'border-white/10 bg-slate-900/70'
       }`}>
-        <div className="flex items-center gap-1.5 font-mono font-bold tracking-wider">
-          {isBlitz ? (
-            <>
-              <Zap className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-              <span className="text-cyan-300">TURBO BLITZ ARENA // 2X SPEED</span>
-            </>
-          ) : (
-            <>
-              <Dices className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-amber-300">HERITAGE RULES // 3D DICE</span>
-            </>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {isBlitz ? (
-            <span className="bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full border border-cyan-500/40 font-mono font-bold flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
-              <span>TACTICAL DECK</span>
-            </span>
-          ) : (
-            <span className="text-slate-400 text-[10px]">
-              First to 4 Home wins
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Opponent Status Header */}
-      <div className="px-4 py-1 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black ${
-            oppColor === 'red'
-              ? 'bg-rose-600 text-white ring-2 ring-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.6)]'
-              : isBlitz
-              ? 'bg-amber-400 text-slate-950 ring-2 ring-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.8)]'
-              : 'bg-amber-500 text-slate-950 ring-2 ring-amber-400'
-          }`}>
-            {oppColor === 'red' ? 'R' : (isBlitz ? '⚡' : 'Y')}
-          </div>
-          <div>
-            <span className="text-xs font-bold text-slate-200 block leading-tight">
-              @{activeMatch?.opponent.username} ({oppColor === 'red' ? 'Red' : 'Yellow'})
-            </span>
-            <span className="text-[10px] text-slate-400">
-              Home:{' '}
-              <strong className={oppColor === 'red' ? 'text-rose-400' : 'text-amber-400'}>
-                {(oppColor === 'red' ? playerTokens : opponentTokens).filter((t) => t.step >= 56).length}/4
-              </strong>
-            </span>
+        <div className="flex min-w-0 items-center gap-2">
+          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black ${
+            oppColor === 'red' ? 'bg-rose-600 text-white' : isBlitz ? 'bg-amber-400 text-slate-950' : 'bg-amber-500 text-slate-950'
+          }`}>{oppColor === 'red' ? 'R' : 'Y'}</div>
+          <div className="min-w-0">
+            <div className="truncate text-xs font-bold text-slate-100">@{activeMatch?.opponent.username}</div>
+            <div className="text-[10px] font-medium text-slate-300">{oppColor === 'red' ? 'Red' : 'Yellow'} · {isMyTurn ? 'Waiting' : isBlitz ? 'Choosing a card' : 'Playing'}</div>
           </div>
         </div>
-
-        {!isMyTurn ? (
-          <div className="flex items-center gap-2">
-            {!isBlitz && (
-              <motion.div
-                initial={{ scale: 0.85, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-600/30 border border-amber-400/50 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.35)]"
-              >
-                <Dices className={`w-3.5 h-3.5 text-amber-400 ${isRolling ? 'animate-spin' : ''}`} />
-                <span className="text-[11px] font-black font-mono">
-                  {isRolling ? 'Rolling...' : diceValue !== null ? `Opponent rolled [ ${diceValue} ]` : 'Waiting'}
-                </span>
-              </motion.div>
-            )}
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-              isBlitz
-                ? 'text-cyan-300 bg-cyan-500/25 border border-cyan-400/60 shadow-[0_0_8px_rgba(6,182,212,0.4)] animate-pulse'
-                : 'text-amber-400 bg-amber-500/15 border border-amber-500/30'
-            }`}>
-              {isBlitz ? 'Opponent choosing card...' : isRolling ? 'Opponent rolling...' : diceValue !== null ? 'Moving token' : 'Opponent turn'}
-            </span>
+        {!isBlitz && !isMyTurn && diceValue !== null && (
+          <div className="shrink-0 rounded-lg border border-amber-300/40 bg-amber-400/15 px-2 py-1 font-mono text-xs font-black text-amber-200">
+            {isRolling ? 'Rolling…' : `Rolled ${diceValue}`}
           </div>
-        ) : (
-          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-            Your Move ({myColor === 'red' ? 'Red' : 'Yellow'})
-          </span>
         )}
+        <div className="shrink-0 text-right">
+          <div className="text-[10px] font-semibold text-slate-300">Home <span className="font-black text-white">{opponentHomeCount}/4</span></div>
+          <div className="mt-0.5 flex justify-end gap-0.5" aria-label={`${opponentHomeCount} of 4 opponent pieces home`}>
+            {Array.from({ length: 4 }, (_, i) => <span key={i} className={`h-2.5 w-2.5 rounded-full border ${i < opponentHomeCount ? oppColor === 'red' ? 'border-rose-300 bg-rose-500' : 'border-amber-200 bg-amber-400' : 'border-slate-500 bg-transparent'}`} />)}
+          </div>
+        </div>
       </div>
 
       {/* Player Turn Timer Countdown Bar (15s Blitz / 20s Classic) */}
@@ -348,6 +293,10 @@ export const LudoGameScreen: React.FC = () => {
         maxTime={maxTurnTime}
         isPlayerTurn={isMyTurn}
         theme={isBlitz ? 'blitz' : 'classic'}
+        compact
+        showMaxTime={false}
+        turnLabel={`Your turn · ${myColor === 'red' ? 'Red' : 'Yellow'}`}
+        opponentTurnLabel={`Opponent turn · ${oppColor === 'red' ? 'Red' : 'Yellow'}`}
       />
 
       {/* Opponent Tactical Cyber Hand (Blitz Only) */}
@@ -384,16 +333,8 @@ export const LudoGameScreen: React.FC = () => {
         </div>
       )}
 
-      {/* Message strip */}
-      <div className="px-4 py-0.5">
-        <div className={`py-1 px-3 rounded-full text-center max-w-sm mx-auto shadow-sm ${
-          isBlitz
-            ? 'bg-cyan-950/60 border border-cyan-500/30 text-cyan-200 font-mono text-[11px]'
-            : 'bg-slate-900/90 border border-white/10 text-slate-200 text-[11px]'
-        }`}>
-          <p className="truncate font-semibold">{gameMessage}</p>
-        </div>
-      </div>
+      {/* Keep concise move feedback inside the cyber strip without another stacked bar. */}
+      {isBlitz && <p className="truncate px-4 text-center font-mono text-[10px] text-cyan-200/80">{gameMessage}</p>}
 
       {/* 15x15 Ludo Board - Stylized distinctly for Blitz vs Classic */}
       <div className="px-3 flex items-center justify-center">
@@ -404,7 +345,12 @@ export const LudoGameScreen: React.FC = () => {
               ? 'p-2 bg-slate-950 border-2 border-slate-600 rounded-2xl shadow-[0_12px_30px_rgba(0,0,0,0.35)] gap-[1.5px]'
               : 'p-1 bg-[#f8f5eb] border-[3px] border-[#6b6252] rounded-md shadow-[0_8px_20px_rgba(0,0,0,0.35)] gap-px'
           }`}
-          style={{ gridTemplateColumns: 'repeat(15, minmax(0, 1fr))' }}
+          style={{
+            gridTemplateColumns: 'repeat(15, minmax(0, 1fr))',
+            width: isBlitz
+              ? 'min(100%, 340px, max(200px, calc(var(--app-height) - 465px)))'
+              : 'min(100%, 380px, max(200px, calc(var(--app-height) - 465px)))',
+          }}
         >
           {Array.from({ length: 15 }).map((_, r) =>
             Array.from({ length: 15 }).map((__, c) => {
@@ -412,22 +358,26 @@ export const LudoGameScreen: React.FC = () => {
               const cellBg = getCellClassName(r, c);
               const hasStar = isStarCell(r, c);
               const isCenter = r === 7 && c === 7;
+              const activeHomeColor = isMyTurn ? myColor : oppColor;
+              const isActiveHomeBase = (
+                activeHomeColor === 'red' ? r < 6 && c < 6 : r > 8 && c > 8
+              );
 
               return (
                 <div
                   key={`${r}-${c}`}
-                  className={`relative flex items-center justify-center ${isBlitz ? 'rounded-[2px]' : 'rounded-none'} ${cellBg}`}
+                  className={`relative flex items-center justify-center ${isBlitz ? 'rounded-[2px]' : 'rounded-none'} ${cellBg} ${isActiveHomeBase ? isBlitz ? 'shadow-[inset_0_0_8px_rgba(34,211,238,0.5)]' : activeHomeColor === 'red' ? 'shadow-[inset_0_0_7px_rgba(244,63,94,0.4)]' : 'shadow-[inset_0_0_7px_rgba(245,158,11,0.45)]' : ''}`}
                 >
-                  {/* Center Core 4-Triangle SVG (Classic) or Target Icon (Blitz) */}
+                  {/* Keep Blitz center marker untouched; Classic finish spans the full 3x3 home. */}
                   {isCenter && (
                     isBlitz ? (
                       <Target className="w-3.5 h-3.5 absolute text-white/90" />
                     ) : (
-                      <div className="absolute inset-0 z-0 pointer-events-none">
+                      <div className="absolute left-1/2 top-1/2 z-[5] h-[300%] w-[300%] -translate-x-1/2 -translate-y-1/2 pointer-events-none">
                         <svg viewBox="0 0 100 100" className="w-full h-full">
-                          <polygon points="0,0 100,0 50,50" fill="#059669" />
-                          <polygon points="100,0 100,100 50,50" fill="#eab308" />
-                          <polygon points="100,100 0,100 50,50" fill="#dc2626" />
+                          <polygon points="0,0 100,0 50,50" fill="#dc2626" />
+                          <polygon points="100,0 100,100 50,50" fill="#059669" />
+                          <polygon points="100,100 0,100 50,50" fill="#eab308" />
                           <polygon points="0,100 0,0 50,50" fill="#2563eb" />
                         </svg>
                       </div>
@@ -449,7 +399,7 @@ export const LudoGameScreen: React.FC = () => {
                     isBlitz ? (
                       <Zap className="w-2.5 h-2.5 text-cyan-200 fill-cyan-200 absolute" />
                     ) : (
-                      <Star className="w-2.5 h-2.5 text-slate-700 fill-slate-300 absolute opacity-80" />
+                      <Star className="w-3.5 h-3.5 text-amber-800 fill-amber-500 absolute drop-shadow-sm" />
                     )
                   )}
 
@@ -475,7 +425,7 @@ export const LudoGameScreen: React.FC = () => {
                               key={tok.id}
                               color={isRed ? 'red' : 'yellow'}
                               isPlayable={Boolean(isPlayable)}
-                              sizeClassName="w-3.5 h-4 sm:w-4 sm:h-5"
+                              sizeClassName="w-5 h-6"
                               onClick={() => {
                                 if (myTokenObj && isPlayable) {
                                   sound.playClick();
@@ -523,8 +473,34 @@ export const LudoGameScreen: React.FC = () => {
         </div>
       </div>
 
+      {/* Player progress strip mirrors the opponent strip above the board. */}
+      <div className={`mx-3 flex items-center justify-between gap-2 rounded-xl border px-3 py-1.5 ${
+        isMyTurn
+          ? isBlitz ? 'border-cyan-400/50 bg-cyan-950/40 shadow-[0_0_12px_rgba(34,211,238,0.12)]' : myColor === 'red' ? 'border-rose-400/60 bg-rose-950/30' : 'border-amber-400/60 bg-amber-950/30'
+          : 'border-white/10 bg-slate-900/70'
+      }`}>
+        <div className="flex min-w-0 items-center gap-2">
+          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black ${myColor === 'red' ? 'bg-rose-600 text-white' : isBlitz ? 'bg-amber-400 text-slate-950' : 'bg-amber-500 text-slate-950'}`}>
+            {myColor === 'red' ? 'R' : 'Y'}
+          </div>
+          <div className="min-w-0">
+            <div className="truncate text-xs font-bold text-slate-100">You ({myColor === 'red' ? 'Red' : 'Yellow'})</div>
+            <div className="truncate text-[10px] font-medium text-slate-300">{myColor === 'red' ? 'Roll a 6 to deploy' : isBlitz ? 'Choose a move card' : 'Roll a 6 to deploy'}</div>
+          </div>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="text-[10px] font-semibold text-slate-300">Home <span className="font-black text-white">{myHomeCount}/4</span></div>
+          <div className="mt-0.5 flex justify-end gap-0.5" aria-label={`${myHomeCount} of 4 of your pieces home`}>
+            {Array.from({ length: 4 }, (_, i) => <span key={i} className={`h-2.5 w-2.5 rounded-full border ${i < myHomeCount ? myColor === 'red' ? 'border-rose-300 bg-rose-500' : 'border-amber-200 bg-amber-400' : 'border-slate-500 bg-transparent'}`} />)}
+          </div>
+        </div>
+      </div>
+
       {/* Controls: Classic 3D Dice OR Blitz Number Cards */}
-      <div className="px-4 pt-1.5">
+      <div className={`fixed bottom-0 left-0 right-0 z-40 px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-xl ${
+        isBlitz ? 'border-t border-cyan-500/20 bg-slate-950/95 shadow-[0_-8px_28px_rgba(0,0,0,0.45)]' : 'border-t border-white/10 bg-slate-950/95 shadow-[0_-8px_28px_rgba(0,0,0,0.45)]'
+      }`}>
+        <div className="mx-auto w-full max-w-3xl">
         {isBlitz ? (
           /* BLITZ MODE: Strategic Cyber Deck */
           <div>
@@ -533,28 +509,13 @@ export const LudoGameScreen: React.FC = () => {
                 <Cpu className="w-3.5 h-3.5 text-cyan-300" />
                 <span>Choose a move card</span>
               </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    sound.playClick();
-                    telegram.triggerHaptic('selection');
-                    setShowRulesModal(true);
-                  }}
-                  className="px-2 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 text-[10px] font-sans font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                >
-                  <BookOpen className="w-3 h-3 text-cyan-400" />
-                  <span>Rules</span>
-                </button>
-                <span className="text-[10px] text-slate-400 font-sans">Use a 6 to launch a token</span>
-              </div>
+              <span className="text-[10px] text-slate-400 font-sans">Use a 6 to launch a token</span>
             </div>
 
             <div className="grid grid-cols-4 gap-2">
               {blitzCards.map((card) => {
                 const isSelected = selectedCardId === card.id;
                 const isDeploy = card.value === 6;
-                const myTokens = isHost ? playerTokens : opponentTokens;
                 const canPlayCard = isMyTurn && myTokens.some((t) => canTokenMove(t, card.value));
 
                 return (
@@ -597,71 +558,36 @@ export const LudoGameScreen: React.FC = () => {
           </div>
         ) : (
           /* CLASSIC MODE: 3D Dice Roll Button */
-          <div className="flex items-center justify-between bg-slate-900/90 border border-white/10 rounded-2xl p-3">
-            <div className="flex items-center gap-3">
-              <div
-                className={`w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-slate-950 font-black text-2xl flex items-center justify-center shadow-lg border border-amber-300 transition-transform ${
-                  isRolling ? 'rotate-180 scale-110' : ''
-                }`}
-              >
-                {diceValue !== null ? diceValue : <Dices className="w-6 h-6" />}
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-white block">Classic Dice Roll</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      sound.playClick();
-                      telegram.triggerHaptic('selection');
-                      setShowFairnessModal(true);
-                    }}
-                    className="p-1 rounded-md bg-slate-800/70 hover:bg-slate-700 border border-white/10 text-slate-300 transition-colors cursor-pointer"
-                    title="Inspect Provably Fair Cryptographic Dice Commitment"
-                    aria-label="Dice fairness details"
-                  >
-                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                  </button>
-                </div>
-                <span className="text-[10px] text-slate-400">
-                  {isMyTurn
-                    ? diceValue
-                      ? `Rolled ${diceValue}! Select token`
-                      : 'Tap roll button (Need 6 to deploy)'
-                    : isRolling
-                    ? 'Opponent rolling dice...'
-                    : diceValue !== null
-                    ? `Opponent rolled ${diceValue}! Executing move...`
-                    : 'Waiting for opponent roll...'}
-                </span>
-              </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-center gap-2">
+              <p className="text-center text-[11px] font-semibold text-slate-300">
+              {isMyTurn
+                ? diceValue !== null ? `You rolled ${diceValue} · Select a highlighted piece` : myTokens.every((token) => token.step < 0) ? 'Roll a 6 to bring a piece out' : 'Roll to move a piece'
+                : diceValue !== null ? `Opponent rolled ${diceValue}` : 'Waiting for opponent to roll'}
+              </p>
+              <button type="button" onClick={() => setShowFairnessModal(true)} className="rounded-md p-1 text-slate-400 hover:bg-white/10 hover:text-emerald-300" title="Dice fairness details" aria-label="Dice fairness details">
+                <ShieldCheck className="h-3.5 w-3.5" />
+              </button>
             </div>
-
             <motion.button
               id="btn-roll-dice"
-              whileHover={{ scale: isMyTurn && !isRolling && diceValue === null ? 1.04 : 1 }}
-              whileTap={{ scale: isMyTurn && !isRolling && diceValue === null ? 0.96 : 1 }}
+              whileHover={{ scale: isMyTurn && !isRolling && diceValue === null ? 1.015 : 1 }}
+              whileTap={{ scale: isMyTurn && !isRolling && diceValue === null ? 0.98 : 1 }}
               disabled={!isMyTurn || isRolling || diceValue !== null}
               onClick={() => {
                 sound.playDiceRoll();
                 telegram.triggerHaptic('medium');
                 rollDice();
               }}
-              className="py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/20 disabled:opacity-40 flex items-center gap-1.5 transition-all cursor-pointer"
+              className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-amber-500 text-slate-950 shadow-[0_6px_20px_rgba(245,158,11,0.3)] transition-all hover:bg-amber-400 disabled:opacity-50"
             >
-              <Dices className="w-4 h-4" />
-              <span>{isRolling ? 'Rolling...' : 'Roll Dice'}</span>
+              <Dices className={`h-6 w-6 ${isRolling ? 'animate-spin' : ''}`} />
+              <span className="text-base font-black">{isRolling ? 'Rolling…' : diceValue !== null ? `Rolled ${diceValue}` : isMyTurn ? 'Roll dice' : 'Opponent turn'}</span>
             </motion.button>
           </div>
         )}
+        </div>
       </div>
-
-      {/* Game Rules Modal */}
-      <GameRulesModal
-        isOpen={showRulesModal}
-        onClose={() => setShowRulesModal(false)}
-        initialMode={isBlitz ? 'ludo_blitz' : 'ludo_classic'}
-      />
 
       {/* Provably Fair Cryptographic Inspector Modal */}
       <ProvablyFairModal

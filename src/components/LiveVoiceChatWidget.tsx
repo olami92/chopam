@@ -21,7 +21,7 @@ export const LiveVoiceChatWidget: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRemoteSpeaking, setIsRemoteSpeaking] = useState(false);
   const [isLocalSpeaking, setIsLocalSpeaking] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(true);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -29,7 +29,7 @@ export const LiveVoiceChatWidget: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const localAnalyserRef = useRef<AnalyserNode | null>(null);
 
-  const isP2PMatch = Boolean(activeMatch && activeMatch.isVsAi === false && activeMatch.roomCode && activeMatch.status !== 'completed');
+  const isP2PMatch = Boolean(activeMatch && !activeMatch.coinMatchId && activeMatch.isVsAi === false && activeMatch.roomCode && activeMatch.status !== 'completed');
   const opponentName = activeMatch?.opponent?.displayName || activeMatch?.opponent?.username || 'Opponent';
 
   // Clean up WebRTC peer connection & media streams
@@ -260,15 +260,15 @@ export const LiveVoiceChatWidget: React.FC = () => {
   if (!isP2PMatch) return null;
 
   return (
-    <div className="w-full px-3 py-0.5 z-20 sticky top-14">
+    <div className="w-full px-3 py-0.5 z-20">
       {/* Hidden HTML Audio element for remote player voice output */}
       <audio ref={remoteAudioRef} autoPlay playsInline muted={!isSpeakerOn} className="hidden" />
 
       {/* Live Voice Chat Bar Container */}
-      <div className="bg-slate-900/90 backdrop-blur-xl border border-cyan-500/30 rounded-xl p-2 shadow-[0_4px_20px_rgba(6,182,212,0.15)] flex flex-col gap-1 transition-all">
+      <div className="bg-slate-900/90 backdrop-blur-xl border border-cyan-500/30 rounded-xl p-1.5 shadow-[0_4px_20px_rgba(6,182,212,0.15)] flex flex-col gap-1 transition-all">
         <div className="flex items-center justify-between">
           {/* Status Indicator */}
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <div className="relative flex items-center justify-center">
               <Radio
                 className={`w-4 h-4 transition-all ${
@@ -286,7 +286,7 @@ export const LiveVoiceChatWidget: React.FC = () => {
 
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-black tracking-wide text-white uppercase">Live Voice Chat</span>
+                <span className="text-[11px] font-black tracking-wide text-white uppercase">Voice chat</span>
                 <span
                   className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase border ${
                     connectionStatus === 'connected'
@@ -299,18 +299,14 @@ export const LiveVoiceChatWidget: React.FC = () => {
                   {connectionStatus === 'connected' ? 'LIVE' : connectionStatus === 'connecting' ? 'CONNECTING' : 'OFF'}
                 </span>
               </div>
-              <p className="text-[10px] text-slate-400">
-                {connectionStatus === 'connected'
-                  ? `Talking with @${opponentName}`
-                  : `Tap microphone to connect live with @${opponentName}`}
-              </p>
+              {!isMinimized && <p className="text-[10px] text-slate-400">{connectionStatus === 'connected' ? `Talking with @${opponentName}` : `Connect with @${opponentName}`}</p>}
             </div>
           </div>
 
           {/* Action Controls */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1">
             {/* Audio Spectrum Waveform Indicator */}
-            {connectionStatus === 'connected' && (
+            {!isMinimized && connectionStatus === 'connected' && (
               <div className="flex items-center gap-0.5 px-2 py-1 bg-slate-950/60 rounded-lg border border-white/5">
                 <div
                   className={`w-1 rounded-full transition-all ${
@@ -334,17 +330,18 @@ export const LiveVoiceChatWidget: React.FC = () => {
               <button
               onClick={toggleMic}
               title={isMicOn ? 'Mute Microphone' : 'Turn On Microphone'}
-              className={`p-1.5 rounded-lg border flex items-center justify-center transition-all cursor-pointer ${
+              className={`flex items-center justify-center gap-1 rounded-lg border px-2 py-1 transition-all cursor-pointer ${
                 isMicOn
                   ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.3)] scale-105'
                   : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400 border-white/10'
               }`}
             >
-              {isMicOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+              {isMicOn ? <Mic className="h-3.5 w-3.5" /> : <MicOff className="h-3.5 w-3.5" />}
+              <span className="text-[10px] font-bold">Mic {isMicOn ? 'On' : 'Off'}</span>
             </button>
 
             {/* Speaker Toggle Button */}
-            <button
+            {!isMinimized && <button
               onClick={toggleSpeaker}
               title={isSpeakerOn ? 'Mute Opponent Audio' : 'Unmute Opponent Audio'}
               className={`p-1.5 rounded-lg border flex items-center justify-center transition-all cursor-pointer ${
@@ -354,13 +351,10 @@ export const LiveVoiceChatWidget: React.FC = () => {
               }`}
             >
               {isSpeakerOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            </button>
+            </button>}
 
             {/* Minimize Toggle */}
-            <button
-              onClick={() => setIsMinimized(!isMinimized)}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white"
-            >
+            <button type="button" onClick={() => setIsMinimized(!isMinimized)} aria-label={isMinimized ? 'Expand voice chat controls' : 'Collapse voice chat controls'} className="rounded-lg p-1 text-slate-400 hover:text-white">
               {isMinimized ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
             </button>
           </div>

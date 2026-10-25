@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { ShieldCheck, Share2, LogOut, Copy, Check, BookOpen } from 'lucide-react';
+import { ShieldCheck, Share2, LogOut, Copy, Check, BookOpen, MoreVertical } from 'lucide-react';
 import { telegram } from '../services/telegram';
 import { sound } from '../services/audio';
 import { GameRulesModal } from './GameRulesModal';
@@ -15,6 +15,7 @@ export const EscrowBanner: React.FC<EscrowBannerProps> = ({ gameTitle }) => {
   const [copied, setCopied] = useState(false);
   const [showConfirmQuit, setShowConfirmQuit] = useState(false);
   const [showRulesModal, setShowRulesModal] = useState(false);
+  const [showCoinMatchMenu, setShowCoinMatchMenu] = useState(false);
 
   if (!activeMatch) return null;
 
@@ -47,46 +48,42 @@ export const EscrowBanner: React.FC<EscrowBannerProps> = ({ gameTitle }) => {
     <>
       <div
         id="in-game-escrow-banner"
-        className={`w-full bg-slate-900/80 backdrop-blur-md border-b border-white/10 px-3.5 shadow-md ${activeMatch.coinMatchId ? 'py-2.5' : 'py-2.5 flex items-center justify-between gap-2'}`}
+        className={`w-full bg-slate-900/80 backdrop-blur-md border-b border-white/10 px-3.5 shadow-md ${activeMatch.coinMatchId ? 'py-1.5' : 'py-2.5 flex items-center justify-between gap-2'}`}
       >
         {activeMatch.coinMatchId ? (
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2">
-            <div className="flex min-w-0 items-center gap-2">
-              <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[10px] font-bold text-amber-200">
-                <ShieldCheck className="h-3 w-3 text-amber-300" />
-                <span>TETE COIN MATCH</span>
-              </div>
-              <span className="truncate text-xs font-black text-amber-300">
-                {activeMatch.stake.toLocaleString()} Tete Coins staked
-              </span>
+          <div className="flex min-h-8 items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2 text-[11px]">
+              <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-amber-300" />
+              <span className="truncate font-bold text-amber-100">Tete Coin Match</span>
+              <span className="shrink-0 text-amber-300">· Stake: {activeMatch.stake.toLocaleString()} 🪙</span>
             </div>
-            <button
-              onClick={handleOpenRules}
-              title="View Game Rules & Mechanics"
-              className="flex items-center gap-1 rounded-lg border border-white/10 bg-slate-800/80 px-2 py-1.5 text-[10px] font-bold text-slate-300 transition-colors hover:bg-slate-700"
-            >
-              <BookOpen className="h-3.5 w-3.5 text-amber-400" />
-              <span>Rules</span>
-            </button>
-            <div className="flex min-w-0 items-center gap-1.5">
-              <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wider text-slate-500">Match ID</span>
+            <div className="relative shrink-0">
               <button
-                onClick={handleCopyCode}
-                title="Copy Match ID"
-                className="flex min-w-0 items-center gap-1 rounded-md border border-white/10 bg-slate-950/70 px-2 py-1 text-[10px] font-mono text-slate-300"
+                type="button"
+                onClick={() => setShowCoinMatchMenu((open) => !open)}
+                aria-label="Match options"
+                aria-expanded={showCoinMatchMenu}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-white/10 hover:text-white"
               >
-                <span className="truncate">{activeMatch.roomCode}</span>
-                {copied ? <Check className="h-3 w-3 shrink-0 text-emerald-400" /> : <Copy className="h-3 w-3 shrink-0 text-slate-400" />}
+                <MoreVertical className="h-4 w-4" />
               </button>
+              {showCoinMatchMenu && (
+                <div className="absolute right-0 top-9 z-40 w-44 rounded-xl border border-white/10 bg-slate-900 p-1.5 shadow-xl">
+                  <button type="button" onClick={() => { handleCopyCode(); setShowCoinMatchMenu(false); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-slate-200 hover:bg-white/10">
+                    {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
+                    Copy match ID
+                  </button>
+                  <button type="button" onClick={() => { handleOpenRules(); setShowCoinMatchMenu(false); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-slate-200 hover:bg-white/10">
+                    <BookOpen className="h-3.5 w-3.5 text-amber-400" />
+                    Game rules
+                  </button>
+                  <button type="button" onClick={() => { setShowConfirmQuit(true); setShowCoinMatchMenu(false); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-rose-300 hover:bg-rose-500/10">
+                    <LogOut className="h-3.5 w-3.5" />
+                    Forfeit match
+                  </button>
+                </div>
+              )}
             </div>
-            <button
-              onClick={() => setShowConfirmQuit(true)}
-              title="Cancel Match"
-              className="flex items-center justify-center gap-1 rounded-lg border border-rose-400/25 bg-rose-500/10 px-2.5 py-1.5 text-[10px] font-bold text-rose-300 transition-colors hover:bg-rose-500/20"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              <span>Cancel</span>
-            </button>
           </div>
         ) : <>
         {/* Left: Escrow & Pot info */}
@@ -166,10 +163,10 @@ export const EscrowBanner: React.FC<EscrowBannerProps> = ({ gameTitle }) => {
       {showConfirmQuit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
           <div className="w-full max-w-xs bg-slate-900 border border-rose-500/30 rounded-2xl p-4 text-center space-y-3">
-            <h3 className="text-sm font-bold text-white">Forfeit Match?</h3>
+            <h3 className="text-sm font-bold text-white">Forfeit match?</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
               {activeMatch.coinMatchId
-                ? `Exiting will forfeit your ${activeMatch.stake.toLocaleString()} Tete Coin stake.`
+                ? `You’ll lose ${activeMatch.stake.toLocaleString()} Tete Coins.`
                 : `Exiting will forfeit your ₦${activeMatch.stake.toLocaleString()} escrow stake to the opponent.`}
             </p>
             <div className="flex gap-2 pt-1">

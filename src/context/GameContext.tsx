@@ -2059,7 +2059,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           updateTeteCoinBalance(result.balance);
           const outcome = result.winner === 'p2' ? 'player' : 'opponent';
           setActiveMatch((prev) => prev ? { ...prev, status: 'completed', settledResult: outcome, settledAt: new Date().toLocaleTimeString() } : null);
-          addNotification({ title: 'Match Forfeited', message: `You forfeited the Bead 16 match and lost ${activeMatch.stake} Tete Coins.`, type: 'match' });
+          addNotification({ title: 'Match Forfeited', message: `You forfeited the ${activeMatch.gameMode.replaceAll('_', ' ')} match and lost ${activeMatch.stake} Tete Coins.`, type: 'match' });
         }).catch((error) => addNotification({ title: 'Could not forfeit match', message: error?.message || 'Try again when your connection is restored.', type: 'system' }));
         return;
       }

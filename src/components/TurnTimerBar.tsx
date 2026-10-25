@@ -7,6 +7,10 @@ interface TurnTimerBarProps {
   maxTime: number;
   isPlayerTurn: boolean;
   theme?: 'blitz' | 'classic' | 'whot' | 'draughts' | 'bead16';
+  compact?: boolean;
+  showMaxTime?: boolean;
+  turnLabel?: string;
+  opponentTurnLabel?: string;
 }
 
 export const TurnTimerBar: React.FC<TurnTimerBarProps> = ({
@@ -14,9 +18,13 @@ export const TurnTimerBar: React.FC<TurnTimerBarProps> = ({
   maxTime,
   isPlayerTurn,
   theme = 'classic',
+  compact = false,
+  showMaxTime = true,
+  turnLabel,
+  opponentTurnLabel,
 }) => {
   const percentage = Math.max(0, Math.min(100, (timeLeft / maxTime) * 100));
-  const isUrgent = isPlayerTurn && timeLeft <= 5;
+  const isUrgent = isPlayerTurn && (theme === 'classic' ? percentage <= 20 : timeLeft <= 5);
 
   // Theme-specific styles
   const getThemeStyles = () => {
@@ -107,22 +115,32 @@ export const TurnTimerBar: React.FC<TurnTimerBarProps> = ({
         };
       case 'classic':
       default:
+        const classicLow = percentage <= 20;
+        const classicMid = percentage <= 50;
         return {
           container: isUrgent
-            ? 'bg-rose-950/60 border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.3)]'
+            ? 'bg-rose-950/50 border-rose-500/60 shadow-[0_0_14px_rgba(244,63,94,0.2)]'
+            : isPlayerTurn && classicMid
+            ? 'bg-amber-950/40 border-amber-500/40'
             : isPlayerTurn
-            ? 'bg-slate-900/90 border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.15)]'
+            ? 'bg-emerald-950/40 border-emerald-500/40'
             : 'bg-slate-950/60 border-white/10',
-          barColor: isUrgent
-            ? 'bg-gradient-to-r from-rose-500 to-amber-400'
-            : 'bg-gradient-to-r from-emerald-400 via-teal-400 to-amber-400',
+          barColor: classicLow
+            ? 'bg-rose-500'
+            : classicMid
+            ? 'bg-amber-400'
+            : 'bg-emerald-400',
           badge: isUrgent
-            ? 'bg-rose-500/25 text-rose-300 border-rose-500/50 animate-pulse'
+            ? 'bg-rose-500/15 text-rose-300 border-rose-500/40'
+            : isPlayerTurn && classicMid
+            ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
             : isPlayerTurn
-            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
             : 'bg-slate-800 text-slate-400 border-white/10',
           text: isUrgent
             ? 'text-rose-300'
+            : isPlayerTurn && classicMid
+            ? 'text-amber-200'
             : isPlayerTurn
             ? 'text-emerald-200'
             : 'text-slate-400',
@@ -143,7 +161,7 @@ export const TurnTimerBar: React.FC<TurnTimerBarProps> = ({
 
   return (
     <div
-      className={`mx-3 mb-1 px-3 py-1.5 rounded-xl border transition-all duration-300 overflow-hidden ${styles.container}`}
+      className={`${compact ? 'mx-3 mb-1 px-3 py-2 rounded-xl' : 'mx-3 mb-1 px-3 py-1.5 rounded-xl'} border transition-all duration-300 overflow-hidden ${styles.container}`}
     >
       <div className="flex items-center justify-between text-xs mb-1">
         <div className="flex items-center gap-1.5 font-bold">
@@ -154,14 +172,14 @@ export const TurnTimerBar: React.FC<TurnTimerBarProps> = ({
               ) : (
                 <Timer className="w-3.5 h-3.5 text-amber-400" />
               )}
-              <span className={styles.text}>
-                {isUrgent ? 'Hurry! Turn Ending' : 'Your Turn'}
+              <span className={`${styles.text} ${compact ? 'text-sm' : ''}`}>
+                {isUrgent ? 'Hurry! Turn Ending' : turnLabel || 'Your Turn'}
               </span>
             </>
           ) : (
             <>
               <Clock className="w-3.5 h-3.5 text-slate-500 animate-spin-slow" />
-              <span className="text-slate-400 font-medium">Opponent's Turn</span>
+              <span className="text-slate-400 font-medium">{opponentTurnLabel || "Opponent's Turn"}</span>
             </>
           )}
         </div>
@@ -170,10 +188,10 @@ export const TurnTimerBar: React.FC<TurnTimerBarProps> = ({
         <div className="flex items-center gap-1">
           {isPlayerTurn ? (
             <span
-              className={`px-2 py-0.5 rounded-md text-[11px] font-black border font-mono tracking-tight flex items-center gap-1 transition-all ${styles.badge}`}
+              className={`px-2 py-0.5 rounded-md ${compact ? 'text-lg' : 'text-[11px]'} font-black border font-mono tracking-tight flex items-center gap-1 transition-all ${styles.badge}`}
             >
               <span>{formatTime(timeLeft)}</span>
-              <span className="text-[9px] opacity-70 font-normal">/ {formatTime(maxTime)}</span>
+              {showMaxTime && <span className="text-[9px] opacity-70 font-normal">/ {formatTime(maxTime)}</span>}
             </span>
           ) : (
             <span className="px-2 py-0.5 rounded-md text-[10px] text-slate-500 bg-slate-900 border border-white/5 font-mono">
