@@ -103,6 +103,8 @@ export interface PendingPenalty {
 
 export function useWhotGame(onGameOver: (winner: 'player' | 'opponent') => void) {
   const { recordReplayStep, user, activeMatch, sendP2pStateUpdate, submitCoinAiAction, timeoutCoinAiMatch } = useGame();
+  const sendP2pStateUpdateRef = useRef(sendP2pStateUpdate);
+  sendP2pStateUpdateRef.current = sendP2pStateUpdate;
   const [playerHand, setPlayerHand] = useState<WhotCard[]>([]);
   const [opponentHand, setOpponentHand] = useState<WhotCard[]>([]);
   const [discardPile, setDiscardPile] = useState<WhotCard[]>([]);
@@ -116,7 +118,9 @@ export function useWhotGame(onGameOver: (winner: 'player' | 'opponent') => void)
   const [pendingPenalty, setPendingPenalty] = useState<PendingPenalty | null>(null);
   const [isGameOver, setIsGameOver] = useState(false);
 
-  const isP2P = activeMatch?.isVsAi === false;
+  // Tete Coin matches use the authoritative server but are not peer-to-peer rooms.
+  // Treating them as P2P caused every deadline refresh to recreate initGame and redeal.
+  const isP2P = activeMatch?.isVsAi === false && !activeMatch.coinMatchId;
   const isHost = activeMatch
     ? activeMatch.hostUsername
       ? activeMatch.hostUsername.toLowerCase() === (user?.username || '').toLowerCase()
@@ -255,8 +259,8 @@ export function useWhotGame(onGameOver: (winner: 'player' | 'opponent') => void)
     setLastAction('Table opened');
     setTurnTimeLeft(maxTurnTime);
 
-    if (isP2P && isHost && sendP2pStateUpdate) {
-      sendP2pStateUpdate({
+    if (isP2P && isHost && sendP2pStateUpdateRef.current) {
+      sendP2pStateUpdateRef.current({
         hostHand: pHand,
         challengerHand: oHand,
         discardPile: [initialDiscard],
@@ -273,7 +277,7 @@ export function useWhotGame(onGameOver: (winner: 'player' | 'opponent') => void)
         challengerTimeoutCount: 0,
       });
     }
-  }, [maxTurnTime, isP2P, isHost, sendP2pStateUpdate]);
+  }, [maxTurnTime, isP2P, isHost]);
 
   useEffect(() => {
     initGame();
