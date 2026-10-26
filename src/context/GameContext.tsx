@@ -389,7 +389,7 @@ interface GameContextType {
   completeCoinAiMatch: (winner: 'player' | 'opponent') => void;
   settleMatch: (winner: 'player' | 'opponent' | 'draw') => string;
   cancelMatch: () => void;
-  forfeitMatch: () => void;
+  forfeitMatch: () => Promise<boolean>;
   recordReplayStep: (step: Omit<ReplayStep, 'stepIndex'>) => void;
   clearReplaySteps: () => void;
   deposit: (amount: number, method: string) => void;
@@ -2052,16 +2052,21 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     telegram.triggerHaptic('medium');
   }, [addNotification]);
 
-  const forfeitMatch = useCallback(() => {
+  const forfeitMatch = useCallback(async (): Promise<boolean> => {
     if (activeMatch && activeMatch.status !== 'completed') {
       if (activeMatch.coinMatchId) {
-        import('../services/teteCoinMatchService').then(({ TeteCoinMatchService }) => TeteCoinMatchService.forfeit(activeMatch.coinMatchId!)).then((result) => {
+        try {
+          const { TeteCoinMatchService } = await import('../services/teteCoinMatchService');
+          const result = await TeteCoinMatchService.forfeit(activeMatch.coinMatchId);
           updateTeteCoinBalance(result.balance);
           const outcome = result.winner === 'p2' ? 'player' : 'opponent';
           setActiveMatch((prev) => prev ? { ...prev, status: 'completed', settledResult: outcome, settledAt: new Date().toLocaleTimeString() } : null);
           addNotification({ title: 'Match Forfeited', message: `You forfeited the ${activeMatch.gameMode.replaceAll('_', ' ')} match and lost ${activeMatch.stake} Tete Coins.`, type: 'match' });
-        }).catch((error) => addNotification({ title: 'Could not forfeit match', message: error?.message || 'Try again when your connection is restored.', type: 'system' }));
-        return;
+          return true;
+        } catch (error: any) {
+          addNotification({ title: 'Could not forfeit match', message: error?.message || 'Try again when your connection is restored.', type: 'system' });
+          return false;
+        }
       }
       const oppUsername = activeMatch.opponent.username;
       const stakeAmt = activeMatch.stake;
@@ -2071,8 +2076,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         message: `You forfeited the duel against @${oppUsername}. ₦${stakeAmt.toLocaleString()} stake transferred to opponent.`,
         type: 'match',
       });
+      return true;
     } else {
       setActiveMatch(null);
+      return true;
     }
   }, [activeMatch, settleMatch, addNotification, updateTeteCoinBalance]);
 

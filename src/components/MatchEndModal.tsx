@@ -13,7 +13,7 @@ interface MatchEndModalProps {
 }
 
 export const MatchEndModal: React.FC<MatchEndModalProps> = ({ winner, onPlayAgain, onExit }) => {
-  const { activeMatch, user, escrowHistory, openReplay } = useGame();
+  const { activeMatch, user, escrowHistory, openReplay, setActiveTab } = useGame();
   const [copied, setCopied] = useState(false);
   const isWin = winner === 'player';
   const isCoinMatch = Boolean(activeMatch?.coinMatchId);
@@ -208,7 +208,12 @@ export const MatchEndModal: React.FC<MatchEndModalProps> = ({ winner, onPlayAgai
 
           <div className="w-full flex gap-2">
             <button
-              onClick={onExit}
+              onClick={() => {
+                // Reset the destination explicitly before the match screen unmounts.
+                // This keeps the arena selected even if an exit handler only clears the match.
+                setActiveTab('arena');
+                onExit();
+              }}
               className="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 border border-white/10 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
             >
               <span>Back to Arena</span>

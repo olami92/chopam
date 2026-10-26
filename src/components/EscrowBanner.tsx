@@ -16,6 +16,7 @@ export const EscrowBanner: React.FC<EscrowBannerProps> = ({ gameTitle }) => {
   const [showConfirmQuit, setShowConfirmQuit] = useState(false);
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [showCoinMatchMenu, setShowCoinMatchMenu] = useState(false);
+  const [forfeitPending, setForfeitPending] = useState(false);
 
   if (!activeMatch) return null;
 
@@ -32,10 +33,13 @@ export const EscrowBanner: React.FC<EscrowBannerProps> = ({ gameTitle }) => {
     sound.playClick();
   };
 
-  const handleSurrender = () => {
+  const handleSurrender = async () => {
+    if (forfeitPending) return;
     sound.playClick();
-    setShowConfirmQuit(false);
-    forfeitMatch();
+    setForfeitPending(true);
+    const succeeded = await forfeitMatch();
+    setForfeitPending(false);
+    if (succeeded) setShowConfirmQuit(false);
   };
 
   const handleOpenRules = () => {
@@ -178,9 +182,10 @@ export const EscrowBanner: React.FC<EscrowBannerProps> = ({ gameTitle }) => {
               </button>
               <button
                 onClick={handleSurrender}
-                className="flex-1 py-2 rounded-xl bg-rose-600 text-xs font-bold text-white hover:bg-rose-500"
+                disabled={forfeitPending}
+                className="flex-1 py-2 rounded-xl bg-rose-600 text-xs font-bold text-white hover:bg-rose-500 disabled:cursor-wait disabled:opacity-70"
               >
-                Forfeit
+                {forfeitPending ? 'Forfeiting…' : 'Forfeit'}
               </button>
             </div>
           </div>
